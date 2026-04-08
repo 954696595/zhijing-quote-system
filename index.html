@@ -261,7 +261,7 @@
 // ⚠️ 请务必替换为您的 Supabase 项目实际值
 const SUPABASE_URL = 'https://gdjeikyzqoxitebzmtwu.supabase.co';      // 替换这里
 const SUPABASE_ANON_KEY = 'sb_publishable_sRXZc84WxTpAK9b293sJig_VQOBijvS';               // 替换这里
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let currentUser = null;
 let isSubscriptionValid = true;
