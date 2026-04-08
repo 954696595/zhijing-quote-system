@@ -1,0 +1,2066 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>智景空间报价系统 - 云端专业版</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif; }
+        body { background: #eef2f8; margin: 0; padding: 0; min-height: 100vh; }
+        .app-layout { display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; background: #1e2a3a; color: white; flex-shrink: 0; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; display: flex; flex-direction: column; transition: width 0.3s ease; overflow-y: auto; box-shadow: 2px 0 10px rgba(0,0,0,0.1); }
+        .sidebar.collapsed { width: 60px; }
+        .sidebar-header { padding: 20px 16px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
+        .sidebar-header h2 { font-size: 1rem; margin: 0; white-space: nowrap; overflow: hidden; }
+        .sidebar.collapsed .sidebar-header h2 { display: none; }
+        .collapse-btn { background: none; border: none; color: white; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 8px; }
+        .collapse-btn:hover { background: #334155; }
+        .sidebar.collapsed .collapse-btn { margin: 0 auto; }
+        .tab-buttons { display: flex; flex-direction: column; padding: 16px 8px; gap: 8px; flex: 1; }
+        .tab-btn { background: transparent; border: none; padding: 12px 16px; font-size: 0.9rem; font-weight: 500; border-radius: 12px; cursor: pointer; color: #cbd5e1; text-align: left; display: flex; align-items: center; gap: 12px; transition: all 0.2s; }
+        .tab-btn:hover { background: #334155; color: white; }
+        .tab-btn.active { background: #2c7da0; color: white; }
+        .sidebar.collapsed .tab-btn span:last-child { display: none; }
+        .sidebar.collapsed .tab-btn { justify-content: center; padding: 12px; }
+        .sidebar.collapsed .tab-btn .emoji { font-size: 1.2rem; margin: 0; }
+        .main-content { flex: 1; margin-left: 220px; padding: 20px; transition: margin-left 0.3s ease; }
+        .main-content.expanded { margin-left: 60px; }
+        @media (max-width: 768px) { .sidebar { width: 60px; } .sidebar .sidebar-header h2, .sidebar .tab-btn span:last-child { display: none; } .sidebar .tab-btn { justify-content: center; padding: 12px; } .main-content { margin-left: 60px; } }
+        .tab-pane { display: none; animation: fade 0.2s ease; }
+        .tab-pane.active-pane { display: block; }
+        @keyframes fade { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
+        .card { background: white; border-radius: 28px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); padding: 20px 24px; margin-bottom: 28px; }
+        .card-header { font-size: 1.4rem; font-weight: 700; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; border-left: 5px solid #2c7da0; padding-left: 18px; }
+        .btn { border: none; padding: 8px 18px; border-radius: 32px; font-weight: 500; cursor: pointer; transition: 0.2s; background: #f1f5f9; color: #1e293b; font-size: 0.85rem; }
+        .btn-primary { background: #2c7da0; color: white; }
+        .btn-primary:hover { background: #1f5e7a; }
+        .btn-sm { padding: 4px 12px; font-size: 0.75rem; }
+        .btn-success { background: #166534; color: white; }
+        .btn-success:hover { background: #14532d; }
+        .btn-warning { background: #d97706; color: white; }
+        .btn-warning:hover { background: #b45309; }
+        .editable-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; overflow-x: auto; display: block; }
+        .editable-table th, .editable-table td { border: 1px solid #e2e8f0; padding: 8px 6px; vertical-align: middle; }
+        .editable-table th { background: #f8fafc; font-weight: 600; text-align: center; position: relative; }
+        input, select, textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 12px; padding: 6px 8px; font-size: 0.8rem; background: white; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #2c7da0; box-shadow: 0 0 0 2px rgba(44,125,160,0.2); }
+        input:read-only, .locked-input { background: #f3f4f6; cursor: not-allowed; }
+        .material-lib-card { border: 1px solid #e2edf2; border-radius: 24px; background: #fefefe; padding: 16px; margin-bottom: 20px; }
+        .lib-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #eef2f8; }
+        .lib-name-input { font-size: 1.2rem; font-weight: 700; width: 250px; background: #f9fbfd; border: 1px solid #cbd5e1; border-radius: 30px; padding: 6px 16px; }
+        .lib-actions { display: flex; gap: 8px; }
+        .project-info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px 24px; background: #f9fbfd; border-radius: 24px; padding: 20px; margin-bottom: 28px; border: 1px solid #e2edf2; }
+        .info-item { display: flex; flex-direction: column; gap: 6px; }
+        .info-item label { font-weight: 600; color: #1e2f3e; font-size: 0.8rem; }
+        .space-card, .template-card { background: #fefefe; border-radius: 24px; border: 1px solid #e2e8f0; margin-bottom: 28px; padding: 16px; break-inside: avoid; }
+        .space-header, .template-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #eef2f8; }
+        .space-name-input, .template-name-input { font-size: 1.2rem; font-weight: 700; width: 200px; }
+        .space-dimensions, .template-dimensions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+        .dim-item { display: flex; align-items: center; gap: 8px; background: #f8fafc; padding: 4px 12px; border-radius: 40px; }
+        .dim-item label { font-weight: 500; }
+        .dim-item input { width: 90px; }
+        .space-actions, .template-actions { display: flex; gap: 8px; }
+        .space-subtotal, .template-subtotal { text-align: right; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #cbd5e1; font-weight: 700; font-size: 0.95rem; color: #1f5e7a; }
+        .item-table-wrapper { overflow-x: auto; margin-top: 16px; }
+        .rule-select { min-width: 110px; }
+        .delete-space-btn, .delete-template-btn { background: #fee2e2; color: #b91c1c; }
+        .summary-area { background: #f9fbfd; border-radius: 24px; padding: 20px; margin-top: 20px; border: 1px solid #e2edf2; }
+        .summary-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
+        .summary-row.total { font-weight: 800; font-size: 1.1rem; border-bottom: none; margin-top: 8px; padding-top: 12px; border-top: 2px solid #cbd5e1; }
+        .profit-panel { margin-top: 20px; border-radius: 24px; border: 1px solid #e2edf2; overflow: hidden; }
+        .profit-header { background: #f0f4f9; padding: 12px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: #1e2f3e; }
+        .profit-header:hover { background: #e8ecf2; }
+        .profit-content { padding: 16px 20px; background: white; display: none; }
+        .profit-content.show { display: block; }
+        .profit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px 24px; }
+        .profit-item { background: #f9fbfd; border-radius: 20px; padding: 12px 16px; }
+        .profit-item label { font-size: 0.75rem; color: #5f6c84; display: block; margin-bottom: 4px; }
+        .profit-item .value { font-size: 1.3rem; font-weight: 700; color: #1e2f3e; }
+        .profit-item .value.small { font-size: 1rem; }
+        .profit-item .cost-note { font-size: 0.7rem; color: #5f6c84; margin-top: 4px; }
+        .signature-area { display: flex; justify-content: space-between; margin-top: 28px; padding-top: 16px; border-top: 1px solid #cbd5e1; flex-wrap: wrap; gap: 20px; }
+        .sign-item { flex: 1; min-width: 200px; }
+        .sign-item input { border: none; border-bottom: 1px solid #cbd5e1; border-radius: 0; padding: 4px 0; }
+        .sign-item label { font-weight: 500; font-size: 0.8rem; }
+        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; max-width: 600px; width: 90%; border-radius: 32px; padding: 24px; max-height: 80%; overflow-y: auto; text-align: center; }
+        .modal-content input { margin: 12px 0; }
+        .modal-content .btn { margin-top: 12px; margin-right: 8px; }
+        .material-filter { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+        .material-filter input, .material-filter select { flex: 1; min-width: 150px; }
+        .material-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; transition: 0.1s; }
+        .material-item:hover { background: #f1f5f9; }
+        .material-category { display: inline-block; background: #e9ecef; border-radius: 20px; padding: 2px 10px; font-size: 0.7rem; margin-right: 10px; }
+        .lib-badge { background: #d9f0ec; border-radius: 20px; padding: 2px 8px; font-size: 0.7rem; margin-left: 8px; }
+        .radio-group { display: flex; gap: 16px; justify-content: center; margin: 16px 0; flex-wrap: wrap; }
+        .radio-group label { display: flex; align-items: center; gap: 6px; }
+        .export-layout { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+        .export-sidebar { flex: 1; min-width: 280px; background: #f9fbfd; border-radius: 24px; padding: 20px; position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; }
+        .export-preview { flex: 2; min-width: 500px; background: #ffffff; border-radius: 24px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); overflow-x: auto; }
+        .config-group { margin-bottom: 24px; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; }
+        .config-group h4 { margin: 0 0 12px 0; font-size: 0.9rem; color: #1e2f3e; }
+        .config-item { margin-bottom: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .config-item label { font-size: 0.8rem; color: #334155; }
+        .config-item input[type="checkbox"] { width: 18px; height: 18px; margin: 0; }
+        .config-item select { width: auto; min-width: 100px; }
+        .print-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+        .print-table th, .print-table td { border: 1px solid #cbd5e1; padding: 8px 6px; white-space: normal; word-break: break-word; background: white; }
+        .print-table th { background: #f1f5f9; font-weight: 600; position: relative; }
+        .resize-handle { position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: transparent; z-index: 10; }
+        .resize-handle:hover { background: #2c7da0; }
+        .print-title-input { font-size: 1.5rem; font-weight: 700; text-align: center; width: 100%; border: 1px solid #cbd5e1; padding: 8px; margin-bottom: 16px; background: white; }
+        .print-info { margin-bottom: 20px; padding: 12px; background: white; border-radius: 12px; font-size: 0.85rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; border: 1px solid #e2edf2; }
+        .print-quote-remark { margin: 16px 0 20px 0; padding: 12px; background: white; border-radius: 12px; font-size: 0.85rem; white-space: pre-wrap; word-break: break-word; border: 1px solid #e2e8f0; }
+        .row-height-slider { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+        .row-height-slider label { font-size: 0.8rem; font-weight: 500; }
+        .backup-area { margin-top: 16px; padding: 12px; background: #fef9e3; border-radius: 16px; border: 1px solid #fde68a; }
+        .backup-area h4 { margin: 0 0 8px 0; font-size: 0.9rem; color: #92400e; }
+        .backup-buttons { display: flex; gap: 12px; flex-wrap: wrap; }
+        .lock-badge { background: #fef9e3; border-radius: 20px; padding: 4px 12px; font-size: 0.7rem; color: #92400e; }
+        .history-list { max-height: 300px; overflow-y: auto; margin-top: 12px; }
+        .history-item { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; cursor: pointer; display: flex; justify-content: space-between; }
+        .history-item:hover { background: #f1f5f9; }
+        .actual-cost-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 16px; }
+        .actual-item { background: #fef9e3; border-radius: 16px; padding: 12px; }
+        .template-type-selector { display: flex; gap: 12px; margin-bottom: 16px; }
+        .template-type-btn { flex: 1; text-align: center; padding: 8px; background: #f1f5f9; border-radius: 30px; cursor: pointer; }
+        .template-type-btn.active { background: #2c7da0; color: white; }
+        .category-container { margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; }
+        .category-header { background: #f1f5f9; padding: 10px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+        .category-header:hover { background: #e2e8f0; }
+        .category-title { display: flex; align-items: center; gap: 8px; }
+        .category-actions button { margin-left: 8px; }
+        .category-projects { padding: 12px; background: white; display: none; }
+        .category-projects.open { display: block; }
+        .project-item { background: #f8fafc; border-radius: 16px; padding: 12px; margin-bottom: 12px; border: 1px solid #e2e8f0; }
+        .project-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+        .project-name { font-weight: 700; font-size: 1rem; cursor: pointer; color: #1e2f3e; }
+        .project-name:hover { text-decoration: underline; }
+        .project-date { font-size: 0.7rem; color: #5f6c84; }
+        .project-actions button { margin-left: 8px; }
+        .add-category-btn { margin-bottom: 16px; }
+        .watermark { position: fixed; opacity: 0.1; pointer-events: none; z-index: 999; font-size: 60px; transform: rotate(-30deg); width: 100%; text-align: center; top: 30%; left: 0; }
+        @media print {
+            .sidebar, .btn, .delete-item, .pick-material, .add-item-btn, .delete-space-btn, #addNewSpaceBtn, .card-header button, .toolbar, .export-config, .modal, .sync-btn, .delete-row-btn, .lib-actions button, .resize-handle, .collapse-btn { display: none !important; }
+            .main-content { margin-left: 0 !important; }
+            .print-area, .print-area * { visibility: visible; }
+            .print-area { position: absolute; top: 0; left: 0; width: 100%; margin: 0; padding: 20px; }   
+            .export-sidebar, .export-layout > .export-sidebar { display: none !important; }
+            .export-preview { width: 100% !important; margin: 0 !important; padding: 0 !important; }
+            .card-header button, #exportPane .card-header div { display: none !important; }
+            * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            @page { size: A4; margin: 1.5cm; }
+            .print-table th, .print-table td { border: 1px solid #000 !important; font-size: 11pt; padding: 4px 6px; background: white !important; }
+            .print-title-input { border: none !important; text-align: center; font-size: 18pt; font-weight: bold; background: transparent; }
+            .print-info { font-size: 10pt; background: white; border: 1px solid #ccc; }
+            .print-quote-remark { font-size: 10pt; background: white; border: 1px solid #e2e8f0; }
+            .space-card, .print-area > div { page-break-inside: avoid; }
+            .space-break { page-break-before: always; }
+            .space-break:first-of-type { page-break-before: avoid; }
+        }
+        .font-small .print-table { font-size: 10px; }
+        .font-medium .print-table { font-size: 12px; }
+        .font-large .print-table { font-size: 14px; }
+        .print-area { max-width: 210mm; margin: 0 auto; background: white; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .material-locked-overlay { text-align: center; padding: 60px 20px; background: #f9fbfd; border-radius: 24px; }
+        .material-locked-overlay .lock-icon { font-size: 3rem; }
+        .material-locked-overlay h3 { margin: 16px 0 8px; }
+        .template-select-modal { max-width: 500px; }
+        .template-list-item { padding: 12px; border-bottom: 1px solid #e2e8f0; cursor: pointer; }
+        .template-list-item:hover { background: #f1f5f9; }
+        .whole-space-check-item { display: flex; align-items: center; gap: 12px; padding: 8px; border-bottom: 1px solid #e2e8f0; }
+        .calc-icon { cursor: pointer; margin-left: 6px; font-size: 1rem; display: inline-block; color: #2c7da0; }
+        .batch-checkbox { margin-right: 8px; }
+        .rule-cell { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+        .material-batch-actions { margin-bottom: 16px; display: flex; gap: 8px; align-items: center; }
+        #userStatusBar { position: fixed; top: 10px; right: 20px; z-index: 1000; background: white; padding: 6px 12px; border-radius: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-size: 0.8rem; display: flex; align-items: center; gap: 8px; }
+        .subscription-badge { background: #fef9e3; border-radius: 20px; padding: 4px 12px; font-size: 0.7rem; color: #92400e; }
+        .logout-btn { background: #e2e8f0; color: #1e293b; margin-left: 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+<div class="app-layout">
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header"><h2>📋 智装报价 v2.8.8</h2><button class="collapse-btn" id="collapseSidebarBtn">◀</button></div>
+        <div class="tab-buttons">
+            <button class="tab-btn active" data-tab="material"><span class="emoji">📦</span><span>材料库管理</span></button>
+            <button class="tab-btn" data-tab="pending"><span class="emoji">📥</span><span>待收录材料</span></button>
+            <button class="tab-btn" data-tab="template"><span class="emoji">📋</span><span>项目模板</span></button>
+            <button class="tab-btn" data-tab="space"><span class="emoji">🏠</span><span>项目报价</span></button>
+            <button class="tab-btn" data-tab="export"><span class="emoji">📎</span><span>打印预览</span></button>
+            <button class="tab-btn" data-tab="projects"><span class="emoji">📁</span><span>项目汇总</span></button>
+            <button class="tab-btn" data-tab="costcheck"><span class="emoji">💰</span><span>成本复盘</span></button>
+            <button class="tab-btn" data-tab="history"><span class="emoji">🕒</span><span>历史版本</span></button>
+            <button class="tab-btn" data-tab="backup"><span class="emoji">💾</span><span>数据备份</span></button>
+        </div>
+    </div>
+    <div class="main-content" id="mainContent">
+        <!-- 材料库 -->
+        <div id="materialPane" class="tab-pane active-pane"><div class="card"><div class="card-header"><span>📋 材料库管理 <span id="lockStatus" class="lock-badge">🔒 已加密</span></span><div><button id="changePasswordBtn" class="btn btn-sm">🔐 修改密码</button><button id="addNewLibBtn" class="btn btn-primary">➕ 新增材料库</button><button id="batchCategoryBtn" class="btn btn-primary">🏷️ 批量修改分类</button></div></div><div id="materialLibsContainer"></div></div></div>
+        <!-- 待收录材料 -->
+        <div id="pendingPane" class="tab-pane"><div class="card"><div class="card-header"><span>📥 待收录材料库</span><button id="addPendingMaterialBtn" class="btn btn-primary">➕ 新增材料</button></div><div id="pendingMaterialsContainer"></div></div></div>
+        <!-- 项目模板 -->
+        <div id="templatePane" class="tab-pane"><div class="card"><div class="card-header"><span>📋 项目模板管理</span><button id="addNewTemplateBtn" class="btn btn-primary">➕ 新增模板</button></div><div class="template-type-selector"><div class="template-type-btn active" data-type="single">🏠 单空间模板</div><div class="template-type-btn" data-type="whole">🏘️ 整套户型模板</div></div><div id="templatesContainer"></div></div></div>
+        <!-- 项目报价 -->
+        <div id="spacePane" class="tab-pane"><div class="card"><div class="card-header"><span>🏠 项目信息 & 项目报价</span><div><button id="batchPriceBtn" class="btn btn-primary">💰 批量调价</button><button id="addNewSpaceBtn" class="btn btn-primary">➕ 新增空间</button><button id="addFromTemplateBtn" class="btn btn-primary">📋 从模板新增</button><button id="saveToProjectBtn" class="btn btn-success">📁 保存到项目汇总</button><button id="saveHistorySnapshotBtn" class="btn btn-secondary">💾 保存历史版本</button></div></div><div class="project-info-grid"><div class="info-item"><label>项目名称</label><input type="text" id="projectName"></div><div class="info-item"><label>客户姓名</label><input type="text" id="customerName"></div><div class="info-item"><label>联系电话</label><input type="text" id="customerPhone"></div><div class="info-item"><label>设计师</label><input type="text" id="designerName"></div><div class="info-item"><label>设计师电话</label><input type="text" id="designerPhone"></div><div class="info-item"><label>装修地址</label><input type="text" id="address"></div><div class="info-item"><label>户型</label><input type="text" id="houseType"></div><div class="info-item"><label>计价面积 (m²)</label><input type="number" id="totalArea" step="0.1" value="110"></div></div><div style="margin-bottom:20px;"><label>📝 报价说明</label><textarea id="quoteRemark" rows="3" style="width:100%;"></textarea></div><div id="spacesContainer"></div><div class="summary-area" id="summaryArea"></div><div class="profit-panel"><div class="profit-header" id="profitHeader"><span>📊 利润分析 (点击展开/收起)</span><span>▼</span></div><div class="profit-content" id="profitContent"><div class="profit-grid" id="profitGrid"></div></div></div><div class="signature-area"><div class="sign-item"><label>客户签字：</label><input type="text" id="customerSign"></div><div class="sign-item"><label>时间：</label><input type="text" id="customerSignDate" placeholder="年   月   日"></div><div class="sign-item"><label>设计师签字：</label><input type="text" id="designerSign"></div><div class="sign-item"><label>时间：</label><input type="text" id="designerSignDate" placeholder="年   月   日"></div></div></div></div>
+        <!-- 项目汇总 -->
+        <div id="projectsPane" class="tab-pane"><div class="card"><div class="card-header"><span>📁 项目汇总</span><div><button id="addCategoryBtn" class="btn btn-sm">➕ 新建分类</button><button id="refreshProjectsBtn" class="btn btn-sm">🔄 刷新</button><button id="batchExportProjectsBtn" class="btn btn-primary">📎 批量导出选中项目</button></div></div><div id="projectsListContainer"></div></div></div>
+        <!-- 打印预览 -->
+        <div id="exportPane" class="tab-pane"><div class="card"><div class="card-header"><span>📎 打印预览 & 导出配置</span><div><button id="exportExcelBtn" class="btn btn-success">📊 导出 Excel (XLSX)</button><button id="printBtn" class="btn btn-primary">🖨️ 打印 / 导出 PDF</button></div></div><div class="export-layout"><div class="export-sidebar"><div class="config-group"><h4>📌 选择空间</h4><div id="exportSpaceChecklist"></div></div><div class="config-group"><h4>📋 显示列</h4><div id="exportColumnChecklist"></div></div><div class="config-group"><h4>🎨 显示选项</h4><div class="config-item"><input type="checkbox" id="showProjectInfo" checked> <label>显示项目信息</label></div><div class="config-item"><input type="checkbox" id="showSpaceSubtotal" checked> <label>显示空间小计</label></div><div class="config-item"><input type="checkbox" id="showSummary" checked> <label>显示费用汇总</label></div><div class="config-item"><input type="checkbox" id="showProfit" > <label>显示利润分析</label></div><div class="config-item"><input type="checkbox" id="showSignature" checked> <label>显示签字区域</label></div><div class="config-item"><input type="checkbox" id="showQuoteRemark" checked> <label>显示报价说明</label></div><div class="config-item"><input type="checkbox" id="hideZeroItems"> <label>隐藏合计为0的项目</label></div><div class="config-item"><input type="checkbox" id="showMaterialSummary"> <label>显示材料分类汇总</label></div></div><div class="config-group"><h4>📐 样式调节</h4><div class="config-item"><label>纸张方向：</label><select id="paperDirection"><option value="portrait">竖向</option><option value="landscape">横向</option></select></div><div class="config-item"><label>字体大小：</label><select id="fontSize"><option value="small">小</option><option value="medium" selected>中</option><option value="large">大</option></select></div><div class="config-item"><label>水平对齐：</label><select id="textAlign"><option value="left">左对齐</option><option value="center">居中对齐</option><option value="right">右对齐</option></select></div><div class="config-item"><label>垂直对齐：</label><select id="verticalAlign"><option value="top">顶部对齐</option><option value="middle">垂直居中</option><option value="bottom">底部对齐</option></select></div><div class="row-height-slider"><label>表格行高：</label><input type="range" id="rowHeightSlider" min="1.5" max="4" step="0.1" value="2"><span id="rowHeightValue">2em</span></div></div><div class="config-group"><h4>🏷️ 页眉/页脚/水印</h4><div class="config-item"><label>Logo URL(图片):</label><input type="text" id="headerLogoUrl" placeholder="https://... 或 base64"></div><div class="config-item"><label>页脚文字:</label><input type="text" id="footerText" placeholder="公司电话：XXX"></div><div class="config-item"><label>水印文字:</label><input type="text" id="watermarkText" placeholder="机密/报价专用"></div><div class="config-item"><input type="checkbox" id="enableWatermark"> <label>启用水印</label></div></div></div><div class="export-preview" id="printPreviewArea"></div></div></div></div>
+        <!-- 成本复盘 -->
+        <div id="costcheckPane" class="tab-pane"><div class="card"><div class="card-header"><span>💰 成本复盘</span></div><div class="actual-cost-grid" id="actualCostGrid"></div><div id="costCompareResult" style="margin-top:20px;"></div></div></div>
+        <!-- 历史版本 -->
+        <div id="historyPane" class="tab-pane"><div class="card"><div class="card-header"><span>🕒 报价单历史版本</span><button id="clearHistoryBtn" class="btn btn-sm btn-warning">清空历史</button></div><div id="historyList" class="history-list"></div></div></div>
+        <!-- 备份 -->
+        <div id="backupPane" class="tab-pane"><div class="card"><div class="card-header"><span>💾 数据备份与恢复</span></div><div class="backup-area"><h4>📌 选择性导出数据</h4><p style="font-size:0.85rem;">材料库、待收录材料、项目模板、项目报价、历史版本可选择导出。<span style="color:#b91c1c;">（导出材料库需要密码）</span></p><div class="backup-buttons"><button id="exportSelectiveBtn" class="btn btn-primary">📤 选择性导出</button><label class="btn btn-primary" style="cursor:pointer;">📥 导入数据文件<input type="file" id="importFileInput" accept=".json" style="display:none;"></label><button id="resetDataBtn" class="btn btn-warning">⚠️ 重置所有数据</button><button id="downloadExcelTemplateBtn" class="btn btn-primary">📎 下载导入模板(Excel)</button><label class="btn btn-primary" style="cursor:pointer;">📂 从Excel导入材料库<input type="file" id="importMaterialExcel" accept=".xlsx, .xls" style="display:none;"></label><label class="btn btn-primary" style="cursor:pointer;">📂 从Excel导入空间模板<input type="file" id="importTemplateExcel" accept=".xlsx, .xls" style="display:none;"></label></div><p style="font-size:0.75rem; margin-top:12px;">* 导入将覆盖当前数据，建议先导出备份。Excel导入模板请先下载模板文件。</p></div></div></div>
+    </div>
+</div><!-- 模态框集合 -->
+<div id="passwordModal" class="modal"><div class="modal-content"><h3 id="passwordModalTitle">请输入材料库密码</h3><input type="password" id="passwordInput"><div><button id="passwordConfirmBtn" class="btn btn-primary">确认</button><button id="passwordCancelBtn" class="btn">取消</button></div><p id="passwordError" style="color:red; display:none;">密码错误</p></div></div>
+<div id="exportPasswordModal" class="modal"><div class="modal-content"><h3>🔐 导出数据需要密码验证</h3><input type="password" id="exportPasswordInput"><div><button id="exportPasswordConfirmBtn" class="btn btn-primary">确认导出</button><button id="exportPasswordCancelBtn" class="btn">取消</button></div><p id="exportPasswordError" style="color:red; display:none;">密码错误</p></div></div>
+<div id="changePasswordModal" class="modal"><div class="modal-content"><h3>修改材料库密码</h3><input type="password" id="oldPasswordInput" placeholder="原密码"><input type="password" id="newPasswordInput" placeholder="新密码"><input type="password" id="confirmPasswordInput" placeholder="确认新密码"><div><button id="changePwdConfirmBtn" class="btn btn-primary">确认修改</button><button id="changePwdCancelBtn" class="btn">取消</button></div><p id="changePwdError" style="color:red; display:none;"></p></div></div>
+<div id="exportSelectModal" class="modal"><div class="modal-content"><h3>选择要导出的数据</h3><div class="radio-group"><label><input type="radio" name="exportType" value="material"> 📦 材料库</label><label><input type="radio" name="exportType" value="pending"> 📥 待收录材料</label><label><input type="radio" name="exportType" value="template"> 📋 项目模板</label><label><input type="radio" name="exportType" value="space"> 🏠 项目报价</label><label><input type="radio" name="exportType" value="history"> 🕒 历史版本</label><label><input type="radio" name="exportType" value="all" checked> 全部数据</label></div><div><button id="exportSelectConfirmBtn" class="btn btn-primary">确认导出</button><button id="exportSelectCancelBtn" class="btn">取消</button></div></div></div>
+<div id="materialSelectModal" class="modal"><div class="modal-content" style="max-width:600px;"><h3>选择材料</h3><div class="material-filter"><select id="materialLibFilter"><option value="">所有库</option></select><select id="materialCategoryFilter"><option value="">所有类别</option></select><input type="text" id="materialSearchInput" placeholder="🔍 搜索"></div><div id="modalMaterialList" style="max-height:400px; overflow-y:auto;"></div><button id="closeModalBtn" class="btn">取消</button></div></div>
+<div id="templateSelectModal" class="modal"><div class="modal-content"><h3>选择项目模板</h3><div id="templateListModal"></div><button id="closeTemplateModalBtn" class="btn">取消</button></div></div>
+<div id="pendingToLibModal" class="modal"><div class="modal-content"><h3>移入主材料库</h3><select id="targetLibSelect" style="width:100%; margin-bottom:16px;"></select><div><button id="confirmMoveToLibBtn" class="btn btn-primary">确认移入</button><button id="cancelMoveToLibBtn" class="btn">取消</button></div></div></div>
+<div id="targetProfitModal" class="modal"><div class="modal-content"><h3>目标净利润额</h3><input type="number" id="targetProfitInput" step="100"><div><button id="setTargetProfitBtn" class="btn btn-primary">应用</button><button id="closeTargetProfitBtn" class="btn">取消</button></div></div></div>
+<div id="wholeTemplateSelectModal" class="modal"><div class="modal-content"><h3>选择子空间</h3><div id="wholeSpaceListModal"></div><div><button id="confirmWholeTemplateBtn" class="btn btn-primary">添加选中空间</button><button id="cancelWholeTemplateBtn" class="btn">取消</button></div></div></div>
+<div id="saveProjectModal" class="modal"><div class="modal-content"><h3>保存项目到汇总</h3><input type="text" id="saveProjectName" placeholder="项目名称" style="width:100%;"><select id="saveProjectCategory" style="width:100%; margin-top:12px;"></select><div><button id="confirmSaveProjectBtn" class="btn btn-primary">保存</button><button id="cancelSaveProjectBtn" class="btn">取消</button></div></div></div>
+<div id="renameProjectModal" class="modal"><div class="modal-content"><h3>重命名项目</h3><input type="text" id="renameProjectInput" placeholder="新名称"><div><button id="confirmRenameBtn" class="btn btn-primary">确认</button><button id="cancelRenameBtn" class="btn">取消</button></div></div></div>
+<div id="addCategoryModal" class="modal"><div class="modal-content"><h3>新建分类</h3><input type="text" id="newCategoryName" placeholder="分类名称（如：XX楼盘）"><div><button id="confirmAddCategoryBtn" class="btn btn-primary">创建</button><button id="cancelAddCategoryBtn" class="btn">取消</button></div></div></div>
+<div id="renameCategoryModal" class="modal"><div class="modal-content"><h3>重命名分类</h3><input type="text" id="renameCategoryInput" placeholder="新分类名"><div><button id="confirmRenameCategoryBtn" class="btn btn-primary">确认</button><button id="cancelRenameCategoryBtn" class="btn">取消</button></div></div></div>
+<div id="moveProjectCategoryModal" class="modal"><div class="modal-content"><h3>选择目标分类</h3><select id="moveTargetCategory"></select><div><button id="confirmMoveCategoryBtn" class="btn btn-primary">移动</button><button id="cancelMoveCategoryBtn" class="btn">取消</button></div></div></div>
+<div id="batchPriceModal" class="modal"><div class="modal-content"><h3>批量调价</h3><label>调整方式: <select id="priceAdjustType"><option value="percent">百分比上浮/下浮</option></select></label><input type="number" id="pricePercent" step="1" value="10"> % <span>(正数上浮，负数下浮)</span><br><label>应用到: <select id="priceApplyScope"><option value="all">所有空间</option></select></label><div><button id="confirmPriceAdjustBtn" class="btn btn-primary">应用</button><button id="cancelPriceAdjustBtn" class="btn">取消</button></div></div></div>
+<div id="batchMoveModal" class="modal"><div class="modal-content"><h3>📦 批量移动材料到其他库</h3><p>将选中材料移动到：</p><select id="batchMoveTargetLib" style="width:100%; margin:12px 0;"></select><div><button id="confirmBatchMoveBtn" class="btn btn-primary">确认移动</button><button id="cancelBatchMoveBtn" class="btn">取消</button></div></div></div>
+<div id="calcModal" class="modal"><div class="modal-content"><h3>工程量计算器</h3><div style="text-align:left;"><label>数学表达式 (支持 + - * / 和括号):</label><input type="text" id="calcExpression" placeholder="例如: 2.5*3.2 或 (2+3)*4"><br><button id="doCalcBtn" class="btn btn-primary">计算并填入数量</button><p style="font-size:0.7rem; color:#666;">计算结果将填入当前项目的“数量”字段（仅当规则为“手动”时生效）</p></div></div></div>
+<div id="batchCategoryModal" class="modal"><div class="modal-content"><h3>批量修改材料分类</h3><p>选中以下材料，统一设置分类</p><div id="batchCategoryMaterialList" style="max-height:300px; overflow-y:auto; border:1px solid #ccc; margin-bottom:12px;"></div><label>新分类名称: <input type="text" id="batchNewCategory" placeholder="例如: 水电材料"></label><div style="margin-top: 12px;"><label>或选择已有分类: <select id="batchExistingCategorySelect" style="width: 100%; margin-top: 6px;"><option value="">-- 请选择 --</option></select></label></div><div style="margin-top: 20px;"><button id="confirmBatchCategoryBtn" class="btn btn-primary">确认修改</button><button id="cancelBatchCategoryBtn" class="btn">取消</button></div></div></div>
+<!-- 认证模态框（登录/注册）已单独放在前面，但为了完整性再次列出（避免重复，实际不再添加） -->
+<div id="authModal" class="modal" style="display: flex;">
+    <div class="modal-content">
+        <h2>🔐 智景空间报价系统</h2>
+        <p style="color: #5f6c84; margin-bottom: 20px;">登录以使用您的报价数据</p>
+        <input type="email" id="loginEmail" placeholder="电子邮箱" style="width:100%; margin-bottom:12px; padding:10px;">
+        <input type="password" id="loginPassword" placeholder="密码" style="width:100%; margin-bottom:20px; padding:10px;">
+        <button id="doLoginBtn" class="btn btn-primary" style="width:100%; margin-bottom:10px;">登录</button>
+        <button id="showRegisterBtn" class="btn" style="width:100%;">注册新账号（免费试用7天）</button>
+        <p id="authError" style="color:red; display:none; margin-top:12px;"></p>
+    </div>
+</div>
+<div id="registerModal" class="modal">
+    <div class="modal-content">
+        <h2>📝 注册新账号</h2>
+        <input type="email" id="regEmail" placeholder="电子邮箱" style="width:100%; margin-bottom:12px; padding:10px;">
+        <input type="password" id="regPassword" placeholder="密码（至少6位）" style="width:100%; margin-bottom:20px; padding:10px;">
+        <button id="doRegisterBtn" class="btn btn-primary" style="width:100%; margin-bottom:10px;">注册并开始试用</button>
+        <button id="backToLoginBtn" class="btn" style="width:100%;">返回登录</button>
+        <p id="regError" style="color:red; display:none; margin-top:12px;"></p>
+    </div>
+</div><script>
+// ==================== Supabase 配置 ====================
+// ⚠️ 请务必替换为您的 Supabase 项目实际值
+const SUPABASE_URL = 'https://gdjeikyzqoxitebzmtwu.supabase.co';      // 替换这里
+const SUPABASE_ANON_KEY = 'sb_publishable_sRXZc84WxTpAK9b293sJig_VQOBijvS';               // 替换这里
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentUser = null;
+let isSubscriptionValid = true;
+
+// ==================== 原版全局变量 ====================
+let materialLibs = [], nextLibId = 1, nextMaterialIdGlobal = 1000;
+let spaces = [], nextSpaceId = 1, nextItemIdGlobalSpace = 1000;
+let templates = [], nextTemplateId = 1, nextTemplateItemId = 5000;
+let pendingMaterials = [], nextPendingId = 1;
+let historySnapshots = [];
+let projectInfo = { projectName: "", customerName: "", customerPhone: "", designerName: "", designerPhone: "", address: "", houseType: "", totalArea: 110, quoteRemark: "" };
+let feeSettings = { designFeePerM2: 120, drawingFee: 0, managementRate: 8, taxRate: 3.41 };
+let signature = { customerSign: "", customerSignDate: "", designerSign: "", designerSignDate: "" };
+let targetGrossMargin = 30, targetNetProfit = null;
+let quoteTitleSettings = { companyName: "XX装饰工程有限公司", titleSuffix: "装修报价单" };
+let currentColWidths = {}, currentRowHeight = 2;
+let materialPassword = null, isMaterialUnlocked = false;
+const MANUAL_COST_RATE = 0.6;
+let currentTemplateType = "single";
+let savedProjects = [];
+let categories = [];
+let printConfig = { headerLogoUrl: "", footerText: "", watermarkText: "", enableWatermark: false };
+let tableColWidths = {};
+
+// ==================== 辅助函数 ====================
+function escapeHtml(str) { if (!str) return ''; return String(str).replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m])); }
+function getItemCost(item) { return (item.fromMaterial && item.cost !== undefined) ? item.cost : item.price * MANUAL_COST_RATE; }
+function getActualQuantity(space, item, rawQty) { if (item.fromMaterial && space.lossRate !== undefined) return rawQty * (1 + space.lossRate / 100); return rawQty; }
+function recalcSpaceItems(space) {
+    space.items.forEach(item => {
+        let qty = 0;
+        if (item.rule === "manual") qty = item.quantity;
+        else if (item.rule === "area") qty = space.area;
+        else if (item.rule === "wall") qty = space.perimeter * space.height;
+        else if (item.rule === "perimeter") qty = space.perimeter;
+        item.quantity = Math.round(qty * 100) / 100;
+        let actualQty = getActualQuantity(space, item, item.quantity);
+        item.total = Math.round((actualQty * item.price) * 100) / 100;
+    });
+}
+function renumberItems(items) { items.forEach((item, idx) => { item.code = (idx + 1).toString().padStart(2, '0'); }); }
+function getSpaceSubtotal(space) { return space.items.reduce((s, i) => s + (i.total || 0), 0); }
+function getDirectCostForSpaces(spaceList) { return spaceList.reduce((sum, space) => sum + getSpaceSubtotal(space), 0); }
+function getTotalCostForSpaces(spaceList) {
+    let total = 0;
+    spaceList.forEach(space => {
+        space.items.forEach(item => {
+            let rawQty = item.quantity;
+            let actualQty = getActualQuantity(space, item, rawQty);
+            let unitCost = getItemCost(item);
+            total += unitCost * actualQty;
+        });
+    });
+    return total;
+}
+function getDesignFee() { return (projectInfo.totalArea || 0) * feeSettings.designFeePerM2; }
+function getDrawingFee() { return feeSettings.drawingFee; }
+function getManagementFeeForSpaces(direct) { return direct * (feeSettings.managementRate / 100); }
+function getTaxForSpaces(direct, manage) { return (direct + manage) * (feeSettings.taxRate / 100); }
+function getTotalQuoteForSpaces(direct, design, drawing, manage, tax) { return direct + design + drawing + manage + tax; }
+
+// ==================== 列宽调整函数 ====================
+function enableTableColumnResize(table, storageKey) {
+    if (!table) return;
+    const headerCells = table.querySelectorAll("thead th");
+    headerCells.forEach((th, idx) => {
+        if (th.querySelector(".resize-handle")) return;
+        const handle = document.createElement("div");
+        handle.className = "resize-handle";
+        handle.setAttribute("data-col-index", idx);
+        th.style.position = "relative";
+        th.appendChild(handle);
+        if (tableColWidths[storageKey] && tableColWidths[storageKey][idx]) {
+            th.style.width = tableColWidths[storageKey][idx] + "px";
+        }
+        let dragging = false, startX = 0, startWidth = 0;
+        handle.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            dragging = true;
+            startX = e.clientX;
+            startWidth = th.offsetWidth;
+            document.body.style.cursor = "col-resize";
+            const onMouseMove = (moveEvent) => {
+                if (!dragging) return;
+                const diff = moveEvent.clientX - startX;
+                let newWidth = startWidth + diff;
+                if (newWidth < 40) newWidth = 40;
+                th.style.width = newWidth + "px";
+                if (!tableColWidths[storageKey]) tableColWidths[storageKey] = {};
+                tableColWidths[storageKey][idx] = newWidth;
+                saveAllDataToCloud().catch(console.error);
+            };
+            const onMouseUp = () => {
+                dragging = false;
+                document.body.style.cursor = "";
+                document.removeEventListener("mousemove", onMouseMove);
+                document.removeEventListener("mouseup", onMouseUp);
+            };
+            document.addEventListener("mousemove", onMouseMove);
+            document.addEventListener("mouseup", onMouseUp);
+        });
+    });
+}
+
+// ==================== 云端数据操作（核心） ====================
+function getEmptyDataStructure() {
+    return {
+        materialLibs: [
+            { id: 1, name: "基础项目库", materials: [{ id: 1000, code: "JC01", category: "土建", name: "地面找平", unit: "m²", price: 45, cost: 30, remark: "厚度3cm" }] },
+            { id: 2, name: "主材库", materials: [{ id: 1001, code: "ZC01", category: "瓷砖", name: "仿古地砖", unit: "片", price: 28, cost: 18, remark: "防滑" }] }
+        ],
+        spaces: [
+            { id: 1, name: "客餐厅", area: 20, perimeter: 18, height: 2.7, lossRate: 5, items: [{ id: 1000, code: "01", category: "涂料", name: "墙面乳胶漆", unit: "m²", quantity: 48.6, price: 28, total: 1360.8, description: "净味环保", rule: "wall", cost: 18, fromMaterial: true, locked: true }] },
+            { id: 2, name: "主卧", area: 15, perimeter: 16, height: 2.7, lossRate: 5, items: [{ id: 1001, code: "01", category: "木地板", name: "地板铺贴", unit: "m²", quantity: 15, price: 80, total: 1200, description: "含防潮膜", rule: "area", cost: 50, fromMaterial: true, locked: true }] }
+        ],
+        templates: [
+            { id: 1, name: "卫生间", type: "single", area: 5, perimeter: 9, height: 2.4, lossRate: 5, items: [{ id: 5000, code: "01", category: "防水", name: "地面防水", unit: "m²", quantity: 5, price: 65, total: 325, description: "聚合物水泥", rule: "area", cost: 39, fromMaterial: false, locked: false }] },
+            { id: 2, name: "卧室", type: "single", area: 15, perimeter: 16, height: 2.7, lossRate: 5, items: [{ id: 5001, code: "01", category: "地面", name: "找平+地板", unit: "m²", quantity: 15, price: 120, total: 1800, description: "复合地板", rule: "area", cost: 72, fromMaterial: false, locked: false }] },
+            { id: 3, name: "两房一厅", type: "whole", spaces: [{ name: "客厅", area: 20, perimeter: 18, height: 2.7, lossRate: 5, items: [] }, { name: "主卧", area: 15, perimeter: 16, height: 2.7, lossRate: 5, items: [] }] }
+        ],
+        pendingMaterials: [],
+        historySnapshots: [],
+        projectInfo: { projectName: "", customerName: "", customerPhone: "", designerName: "", designerPhone: "", address: "", houseType: "", totalArea: 110, quoteRemark: "" },
+        feeSettings: { designFeePerM2: 120, drawingFee: 0, managementRate: 8, taxRate: 3.41 },
+        signature: { customerSign: "", customerSignDate: "", designerSign: "", designerSignDate: "" },
+        targetGrossMargin: 30,
+        targetNetProfit: null,
+        quoteTitleSettings: { companyName: "XX装饰工程有限公司", titleSuffix: "装修报价单" },
+        currentColWidths: {},
+        currentRowHeight: 2,
+        nextLibId: 3,
+        nextMaterialIdGlobal: 1002,
+        nextSpaceId: 3,
+        nextItemIdGlobalSpace: 1002,
+        nextTemplateId: 4,
+        nextTemplateItemId: 5002,
+        nextPendingId: 1,
+        tableColWidths: {},
+        categories: [{ id: 1, name: "默认分类" }],
+        savedProjects: []
+    };
+}
+
+async function loadAllDataFromCloud() {
+    if (!currentUser) return false;
+    const { data, error } = await supabase
+        .from('user_data')
+        .select('data')
+        .eq('user_id', currentUser.id)
+        .single();
+    if (error && error.code !== 'PGRST116') {
+        console.error('加载数据失败', error);
+        return false;
+    }
+    if (data) {
+        const d = data.data;
+        materialLibs = d.materialLibs || [];
+        spaces = d.spaces || [];
+        templates = d.templates || [];
+        pendingMaterials = d.pendingMaterials || [];
+        historySnapshots = d.historySnapshots || [];
+        projectInfo = d.projectInfo || { totalArea: 110 };
+        feeSettings = d.feeSettings || { designFeePerM2: 120, drawingFee: 0, managementRate: 8, taxRate: 3.41 };
+        signature = d.signature || {};
+        targetGrossMargin = d.targetGrossMargin !== undefined ? d.targetGrossMargin : 30;
+        targetNetProfit = d.targetNetProfit || null;
+        quoteTitleSettings = d.quoteTitleSettings || { companyName: "XX装饰工程有限公司", titleSuffix: "装修报价单" };
+        currentColWidths = d.currentColWidths || {};
+        currentRowHeight = d.currentRowHeight || 2;
+        nextLibId = d.nextLibId || 1;
+        nextMaterialIdGlobal = d.nextMaterialIdGlobal || 1000;
+        nextSpaceId = d.nextSpaceId || 1;
+        nextItemIdGlobalSpace = d.nextItemIdGlobalSpace || 1000;
+        nextTemplateId = d.nextTemplateId || 1;
+        nextTemplateItemId = d.nextTemplateItemId || 5000;
+        nextPendingId = d.nextPendingId || 1;
+        tableColWidths = d.tableColWidths || {};
+        categories = d.categories || [{ id: 1, name: "默认分类" }];
+        savedProjects = d.savedProjects || [];
+    } else {
+        const empty = getEmptyDataStructure();
+        materialLibs = empty.materialLibs;
+        spaces = empty.spaces;
+        templates = empty.templates;
+        pendingMaterials = empty.pendingMaterials;
+        historySnapshots = empty.historySnapshots;
+        projectInfo = empty.projectInfo;
+        feeSettings = empty.feeSettings;
+        signature = empty.signature;
+        targetGrossMargin = empty.targetGrossMargin;
+        targetNetProfit = empty.targetNetProfit;
+        quoteTitleSettings = empty.quoteTitleSettings;
+        currentColWidths = empty.currentColWidths;
+        currentRowHeight = empty.currentRowHeight;
+        nextLibId = empty.nextLibId;
+        nextMaterialIdGlobal = empty.nextMaterialIdGlobal;
+        nextSpaceId = empty.nextSpaceId;
+        nextItemIdGlobalSpace = empty.nextItemIdGlobalSpace;
+        nextTemplateId = empty.nextTemplateId;
+        nextTemplateItemId = empty.nextTemplateItemId;
+        nextPendingId = empty.nextPendingId;
+        tableColWidths = empty.tableColWidths;
+        categories = empty.categories;
+        savedProjects = empty.savedProjects;
+        await saveAllDataToCloud();
+    }
+    return true;
+}
+
+async function saveAllDataToCloud() {
+    if (!currentUser) return false;
+    const valid = await checkSubscriptionValidity();
+    if (!valid) {
+        alert('您的订阅已过期，请续费后继续使用。如需续费请联系管理员。');
+        return false;
+    }
+    const fullData = {
+        materialLibs, spaces, templates, pendingMaterials, historySnapshots,
+        projectInfo, feeSettings, signature, targetGrossMargin, targetNetProfit,
+        quoteTitleSettings, currentColWidths, currentRowHeight,
+        nextLibId, nextMaterialIdGlobal, nextSpaceId, nextItemIdGlobalSpace,
+        nextTemplateId, nextTemplateItemId, nextPendingId, tableColWidths,
+        categories, savedProjects
+    };
+    const { error } = await supabase.from('user_data').upsert({
+        user_id: currentUser.id,
+        data: fullData,
+        updated_at: new Date()
+    });
+    if (error) {
+        console.error('保存失败', error);
+        return false;
+    }
+    return true;
+}
+
+async function checkSubscriptionValidity() {
+    if (!currentUser) return false;
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('subscription_end')
+        .eq('id', currentUser.id)
+        .single();
+    if (error) return false;
+    if (!data || !data.subscription_end) return false;
+    const endDate = new Date(data.subscription_end);
+    const now = new Date();
+    return endDate > now;
+}
+
+// ==================== 密码管理（材料库加密） ====================
+function initPassword() {
+    let saved = localStorage.getItem("material_password");
+    if (saved) { materialPassword = saved; isMaterialUnlocked = false; document.getElementById("lockStatus").innerHTML = "🔒 已加密"; }
+    else { materialPassword = null; isMaterialUnlocked = true; document.getElementById("lockStatus").innerHTML = "🔓 未加密"; }
+}
+function showPasswordModal(onSuccess) {
+    if (isMaterialUnlocked) { if (onSuccess) onSuccess(); return; }
+    const modal = document.getElementById("passwordModal");
+    const errorMsg = document.getElementById("passwordError");
+    errorMsg.style.display = "none";
+    modal.style.display = "flex";
+    document.getElementById("passwordConfirmBtn").onclick = () => {
+        if (document.getElementById("passwordInput").value.trim() === materialPassword) {
+            isMaterialUnlocked = true;
+            modal.style.display = "none";
+            if (onSuccess) onSuccess();
+        } else errorMsg.style.display = "block";
+    };
+    document.getElementById("passwordCancelBtn").onclick = () => modal.style.display = "none";
+}
+function showChangePasswordModal() {
+    const modal = document.getElementById("changePasswordModal");
+    modal.style.display = "flex";
+    document.getElementById("changePwdConfirmBtn").onclick = () => {
+        let old = document.getElementById("oldPasswordInput").value.trim();
+        let newPwd = document.getElementById("newPasswordInput").value.trim();
+        let conf = document.getElementById("confirmPasswordInput").value.trim();
+        if (old !== materialPassword) { document.getElementById("changePwdError").innerText = "原密码错误"; return; }
+        if (!newPwd) { document.getElementById("changePwdError").innerText = "新密码不能为空"; return; }
+        if (newPwd !== conf) { document.getElementById("changePwdError").innerText = "两次输入不一致"; return; }
+        materialPassword = newPwd;
+        localStorage.setItem("material_password", newPwd);
+        modal.style.display = "none";
+        alert("密码修改成功！");
+    };
+    document.getElementById("changePwdCancelBtn").onclick = () => modal.style.display = "none";
+}
+function checkMaterialAccess(cb) { if (isMaterialUnlocked) cb(); else showPasswordModal(cb); }
+
+// ==================== 材料库渲染（带批量删除/移动/列宽调整） ====================
+function renderMaterialLibs() {
+    const container = document.getElementById("materialLibsContainer");
+    if (!container) return;
+    if (!isMaterialUnlocked) { 
+        container.innerHTML = `<div class="material-locked-overlay"><div class="lock-icon">🔒</div><h3>材料库已加密</h3><button id="unlockMaterialBtn" class="btn btn-primary">🔓 解锁材料库</button></div>`; 
+        document.getElementById("unlockMaterialBtn")?.addEventListener("click", () => showPasswordModal(() => renderMaterialLibs())); 
+        return; 
+    }
+    container.innerHTML = "";
+    materialLibs.forEach(lib => {
+        let card = document.createElement("div"); card.className = "material-lib-card";
+        card.innerHTML = `<div class="lib-header">
+            <input type="text" class="lib-name-input" value="${escapeHtml(lib.name)}">
+            <div class="lib-actions">
+                <button class="btn-sm add-material-btn">➕ 新增材料</button>
+                <button class="btn-sm batch-delete-btn" data-lib-id="${lib.id}">🗑️ 批量删除</button>
+                <button class="btn-sm batch-move-btn" data-lib-id="${lib.id}">📦 批量移动</button>
+                <button class="btn-sm delete-lib-btn">🗑️ 删除库</button>
+            </div>
+        </div>
+        <div class="item-table-wrapper">
+            <table class="editable-table">
+                <thead>
+                    <tr><th style="width:30px"><input type="checkbox" class="select-all-materials" data-lib-id="${lib.id}"></th><th>编号</th><th>类别</th><th>施工项目</th><th>单位</th><th>单价(元)</th><th>成本(元)</th><th>材料说明</th><th>操作</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>`;
+        let tbody = card.querySelector("tbody");
+        lib.materials.forEach(mat => {
+            let row = tbody.insertRow();
+            let checkCell = row.insertCell(); 
+            let chk = document.createElement("input"); 
+            chk.type = "checkbox"; 
+            chk.className = "material-checkbox"; 
+            chk.dataset.id = mat.id; 
+            chk.dataset.libId = lib.id; 
+            checkCell.appendChild(chk);
+            
+            let addCell = (field, type = "text") => { 
+                let td = row.insertCell(); 
+                let inp = document.createElement("input"); 
+                inp.type = type; 
+                inp.value = mat[field] ?? ""; 
+                inp.addEventListener("change", () => { 
+                    mat[field] = type === "number" ? parseFloat(inp.value) || 0 : inp.value; 
+                    saveAllDataToCloud().catch(console.error);
+                    renderMaterialLibs(); 
+                    updateProfitAnalysis(); 
+                    renderPrintPreview(); 
+                }); 
+                td.appendChild(inp); 
+            };
+            addCell("code"); addCell("category"); addCell("name"); addCell("unit"); addCell("price", "number"); addCell("cost", "number"); addCell("remark");
+            
+            let actionTd = row.insertCell(); 
+            let delBtn = document.createElement("button"); 
+            delBtn.innerText = "删除"; 
+            delBtn.className = "btn-sm"; 
+            delBtn.style.background = "#fee2e2"; 
+            delBtn.onclick = () => { 
+                if (confirm("删除此材料？")) { 
+                    lib.materials = lib.materials.filter(m => m.id !== mat.id); 
+                    saveAllDataToCloud().catch(console.error);
+                    renderMaterialLibs(); 
+                    updateProfitAnalysis(); 
+                    renderPrintPreview(); 
+                } 
+            }; 
+            actionTd.appendChild(delBtn);
+        });
+        
+        card.querySelector(".lib-name-input").addEventListener("change", (e) => { 
+            lib.name = e.target.value; 
+            saveAllDataToCloud().catch(console.error);
+            renderMaterialLibs(); 
+        });
+        card.querySelector(".add-material-btn").addEventListener("click", () => { 
+            lib.materials.push({ id: nextMaterialIdGlobal++, code: "", category: "", name: "新材料", unit: "项", price: 0, cost: 0, remark: "" }); 
+            saveAllDataToCloud().catch(console.error);
+            renderMaterialLibs(); 
+        });
+        card.querySelector(".delete-lib-btn").addEventListener("click", () => { 
+            if (confirm(`删除材料库“${lib.name}”？`)) { 
+                materialLibs = materialLibs.filter(l => l.id !== lib.id); 
+                saveAllDataToCloud().catch(console.error);
+                renderMaterialLibs(); 
+            } 
+        });
+        card.querySelector(".batch-delete-btn").addEventListener("click", () => {
+            let checkboxes = card.querySelectorAll(".material-checkbox:checked");
+            if (checkboxes.length === 0) { alert("请先勾选要删除的材料"); return; }
+            if (confirm(`确定删除 ${checkboxes.length} 个材料吗？`)) {
+                let idsToDelete = Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+                lib.materials = lib.materials.filter(m => !idsToDelete.includes(m.id));
+                saveAllDataToCloud().catch(console.error); renderMaterialLibs(); updateProfitAnalysis(); renderPrintPreview();
+                alert("已删除选中材料");
+            }
+        });
+        card.querySelector(".batch-move-btn").addEventListener("click", () => {
+            let checkboxes = card.querySelectorAll(".material-checkbox:checked");
+            if (checkboxes.length === 0) { alert("请先勾选要移动的材料"); return; }
+            let targetLibs = materialLibs.filter(l => l.id !== lib.id);
+            if (targetLibs.length === 0) { alert("没有其他材料库可以移动"); return; }
+            let modal = document.getElementById("batchMoveModal");
+            let select = document.getElementById("batchMoveTargetLib");
+            select.innerHTML = "";
+            targetLibs.forEach(tLib => {
+                let opt = document.createElement("option");
+                opt.value = tLib.id;
+                opt.textContent = tLib.name;
+                select.appendChild(opt);
+            });
+            modal.style.display = "flex";
+            let confirmBtn = document.getElementById("confirmBatchMoveBtn");
+            let cancelBtn = document.getElementById("cancelBatchMoveBtn");
+            let onConfirm = () => {
+                let targetLibId = parseInt(select.value);
+                let targetLib = materialLibs.find(l => l.id === targetLibId);
+                if (targetLib) {
+                    let selectedMaterials = Array.from(checkboxes).map(cb => {
+                        let matId = parseInt(cb.dataset.id);
+                        return lib.materials.find(m => m.id === matId);
+                    }).filter(m => m);
+                    selectedMaterials.forEach(mat => { targetLib.materials.push({ ...mat }); });
+                    let idsToMove = selectedMaterials.map(m => m.id);
+                    lib.materials = lib.materials.filter(m => !idsToMove.includes(m.id));
+                    saveAllDataToCloud().catch(console.error); renderMaterialLibs(); updateProfitAnalysis(); renderPrintPreview();
+                    alert(`已将 ${selectedMaterials.length} 个材料移动到“${targetLib.name}”`);
+                }
+                modal.style.display = "none";
+                confirmBtn.removeEventListener("click", onConfirm);
+                cancelBtn.removeEventListener("click", onCancel);
+            };
+            let onCancel = () => {
+                modal.style.display = "none";
+                confirmBtn.removeEventListener("click", onConfirm);
+                cancelBtn.removeEventListener("click", onCancel);
+            };
+            confirmBtn.addEventListener("click", onConfirm);
+            cancelBtn.addEventListener("click", onCancel);
+        });
+        card.querySelector(".select-all-materials").addEventListener("change", (e) => { 
+            let checked = e.target.checked; 
+            card.querySelectorAll(".material-checkbox").forEach(cb => cb.checked = checked); 
+        });
+        
+        const table = card.querySelector(".editable-table");
+        if (table) enableTableColumnResize(table, `material_lib_${lib.id}`);
+        container.appendChild(card);
+    });
+}
+
+function batchModifyCategory() {
+    let selected = [];
+    document.querySelectorAll(".material-checkbox:checked").forEach(cb => {
+        let matId = parseInt(cb.dataset.id);
+        let libId = parseInt(cb.dataset.libId);
+        let lib = materialLibs.find(l => l.id === libId);
+        if (lib) {
+            let mat = lib.materials.find(m => m.id === matId);
+            if (mat) selected.push({ lib, mat });
+        }
+    });
+    if (selected.length === 0) { alert("请先勾选要修改分类的材料"); return; }
+    let allCategories = new Set();
+    materialLibs.forEach(lib => {
+        lib.materials.forEach(mat => {
+            if (mat.category && mat.category.trim()) allCategories.add(mat.category.trim());
+        });
+    });
+    let categoriesList = Array.from(allCategories).sort();
+    let modal = document.getElementById("batchCategoryModal");
+    let listDiv = document.getElementById("batchCategoryMaterialList");
+    listDiv.innerHTML = selected.map(s => `<div>${escapeHtml(s.mat.name)} (${escapeHtml(s.lib.name)})</div>`).join('');
+    let categorySelect = document.getElementById("batchExistingCategorySelect");
+    categorySelect.innerHTML = '<option value="">-- 请选择 --</option>';
+    categoriesList.forEach(cat => {
+        let opt = document.createElement("option");
+        opt.value = cat;
+        opt.textContent = cat;
+        categorySelect.appendChild(opt);
+    });
+    categorySelect.onchange = () => {
+        let val = categorySelect.value;
+        if (val) document.getElementById("batchNewCategory").value = val;
+    };
+    modal.style.display = "flex";
+    let confirmBtn = document.getElementById("confirmBatchCategoryBtn");
+    let cancelBtn = document.getElementById("cancelBatchCategoryBtn");
+    let onConfirm = () => {
+        let newCat = document.getElementById("batchNewCategory").value.trim();
+        if (!newCat) { alert("请输入或选择分类名称"); return; }
+        selected.forEach(({ mat }) => { mat.category = newCat; });
+        saveAllDataToCloud().catch(console.error); 
+        renderMaterialLibs();
+        modal.style.display = "none";
+        confirmBtn.removeEventListener("click", onConfirm);
+        cancelBtn.removeEventListener("click", onCancel);
+    };
+    let onCancel = () => { 
+        modal.style.display = "none"; 
+        confirmBtn.removeEventListener("click", onConfirm);
+        cancelBtn.removeEventListener("click", onCancel);
+    };
+    confirmBtn.addEventListener("click", onConfirm);
+    cancelBtn.addEventListener("click", onCancel);
+}
+
+// ==================== 待收录材料渲染 ====================
+function renderPendingMaterials() {
+    const container = document.getElementById("pendingMaterialsContainer");
+    if (!container) return;
+    container.innerHTML = "";
+    if (pendingMaterials.length === 0) { container.innerHTML = "<p style='text-align:center; padding:40px;'>暂无待收录材料</p>"; return; }
+    let table = document.createElement("table"); table.className = "editable-table";
+    table.innerHTML = `<thead><tr><th>编号</th><th>类别</th><th>施工项目</th><th>单位</th><th>单价(元)</th><th>成本(元)</th><th>材料说明</th><th>操作</th></tr></thead><tbody></tbody>`;
+    let tbody = table.querySelector("tbody");
+    pendingMaterials.forEach(mat => {
+        let row = tbody.insertRow();
+        let addCell = (field, type = "text") => { let td = row.insertCell(); let inp = document.createElement("input"); inp.type = type; inp.value = mat[field] ?? ""; inp.addEventListener("change", () => { mat[field] = type === "number" ? parseFloat(inp.value) || 0 : inp.value; saveAllDataToCloud().catch(console.error); renderPendingMaterials(); }); td.appendChild(inp); };
+        addCell("code"); addCell("category"); addCell("name"); addCell("unit"); addCell("price", "number"); addCell("cost", "number"); addCell("remark");
+        let actionTd = row.insertCell();
+        let moveBtn = document.createElement("button"); moveBtn.innerText = "📥 移入主库"; moveBtn.className = "btn-sm"; moveBtn.style.background = "#d9f0ec"; moveBtn.style.marginRight = "6px";
+        moveBtn.onclick = () => showMoveToLibModal(mat.id);
+        let delBtn = document.createElement("button"); delBtn.innerText = "删除"; delBtn.className = "btn-sm"; delBtn.style.background = "#fee2e2"; delBtn.onclick = () => { if (confirm("删除此待收录材料？")) { pendingMaterials = pendingMaterials.filter(m => m.id !== mat.id); saveAllDataToCloud().catch(console.error); renderPendingMaterials(); } };
+        actionTd.appendChild(moveBtn); actionTd.appendChild(delBtn);
+    });
+    container.appendChild(table);
+}
+
+function addPendingMaterial() { let newId = nextPendingId++; pendingMaterials.push({ id: newId, code: "", category: "", name: "新材料", unit: "项", price: 0, cost: 0, remark: "" }); saveAllDataToCloud().catch(console.error); renderPendingMaterials(); }
+
+function showMoveToLibModal(pendingId) {
+    let pendingMat = pendingMaterials.find(m => m.id === pendingId);
+    if (!pendingMat) return;
+    showPasswordModal(() => {
+        let libSelect = document.getElementById("targetLibSelect");
+        libSelect.innerHTML = "";
+        materialLibs.forEach(lib => {
+            let opt = document.createElement("option");
+            opt.value = lib.id;
+            opt.textContent = lib.name;
+            libSelect.appendChild(opt);
+        });
+        let modal = document.getElementById("pendingToLibModal");
+        modal.style.display = "flex";
+        let confirmBtn = document.getElementById("confirmMoveToLibBtn");
+        let cancelBtn = document.getElementById("cancelMoveToLibBtn");
+        let onConfirm = () => {
+            let targetLibId = parseInt(libSelect.value);
+            let targetLib = materialLibs.find(l => l.id === targetLibId);
+            if (targetLib) {
+                targetLib.materials.push({ id: nextMaterialIdGlobal++, code: pendingMat.code || "", category: pendingMat.category || "", name: pendingMat.name, unit: pendingMat.unit, price: pendingMat.price, cost: pendingMat.cost, remark: pendingMat.remark || "" });
+                pendingMaterials = pendingMaterials.filter(m => m.id !== pendingId);
+                saveAllDataToCloud().catch(console.error);
+                renderMaterialLibs();
+                renderPendingMaterials();
+                alert(`已移入材料库“${targetLib.name}”`);
+            }
+            modal.style.display = "none";
+            confirmBtn.removeEventListener("click", onConfirm);
+            cancelBtn.removeEventListener("click", onCancel);
+        };
+        let onCancel = () => {
+            modal.style.display = "none";
+            confirmBtn.removeEventListener("click", onConfirm);
+            cancelBtn.removeEventListener("click", onCancel);
+        };
+        confirmBtn.addEventListener("click", onConfirm);
+        cancelBtn.addEventListener("click", onCancel);
+    });
+}
+
+// ==================== 项目报价渲染（完整版，含列宽调整） ====================
+function renderAllSpaces() {
+    const container = document.getElementById("spacesContainer");
+    if (!container) return;
+    container.innerHTML = "";
+    spaces.forEach(space => {
+        recalcSpaceItems(space); renumberItems(space.items);
+        let subtotal = getSpaceSubtotal(space);
+        let spaceDiv = document.createElement("div"); spaceDiv.className = "space-card";
+        spaceDiv.innerHTML = `<div class="space-header">
+            <input type="text" class="space-name-input" value="${escapeHtml(space.name)}">
+            <div class="space-dimensions" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center;">
+                <div class="dim-item"><label>面积:</label><input type="number" class="space-area" value="${space.area}" step="0.1"></div>
+                <div class="dim-item"><label>周长:</label><input type="number" class="space-perimeter" value="${space.perimeter}" step="0.1"></div>
+                <div class="dim-item"><label>层高:</label><input type="number" class="space-height" value="${space.height}" step="0.05"></div>
+                <div class="dim-item"><label>主材损耗率(%):</label><input type="number" class="space-lossrate" value="${space.lossRate || 0}" step="0.1"></div>
+                <button class="btn-sm copy-space-btn">📋 复制空间</button>
+                <button class="btn-sm add-item-btn">➕ 新增项目</button>
+                <button class="btn-sm delete-space-btn" style="background:#fee2e2;">🗑️ 删除空间</button>
+            </div>
+        </div>
+        <div class="item-table-wrapper"><table class="editable-table quote-item-table"><thead><tr><th>编号</th><th>类别</th><th>施工项目</th><th>单位</th><th>工程量依据</th><th>数量</th><th>单价</th><th>合计</th><th>施工说明</th><th>操作</th></tr></thead><tbody>${space.items.map(item => `<tr data-item-id="${item.id}"><td><input type="text" class="item-code" value="${escapeHtml(item.code)}" data-field="code"></td>
+            <td><input type="text" class="item-category" value="${escapeHtml(item.category||'')}" data-field="category"></td>
+            <td><input type="text" class="item-name" value="${escapeHtml(item.name)}" data-field="name"></td>
+            <td><input type="text" class="item-unit" value="${escapeHtml(item.unit)}" data-field="unit"></td>
+            <td><div class="rule-cell"><select class="rule-select" data-field="rule"><option value="manual" ${item.rule==="manual"?"selected":""}>手动</option><option value="area" ${item.rule==="area"?"selected":""}>地面面积</option><option value="wall" ${item.rule==="wall"?"selected":""}>墙面(周长×高)</option><option value="perimeter" ${item.rule==="perimeter"?"selected":""}>周长</option></select><span class="calc-icon" data-item-id="${item.id}">🧮</span></div></td>
+            <td><input type="number" step="0.01" class="item-qty" value="${item.quantity.toFixed(2)}" data-field="quantity" ${item.rule!=="manual"?"readonly style='background:#f3f4f6'":""}></td>
+            <td><input type="number" step="0.5" class="item-price" value="${item.price.toFixed(2)}" data-field="price" ${item.locked?"readonly class='locked-input'":""}></td>
+            <td class="item-total">${item.total.toFixed(2)}</td>
+            <td><input type="text" class="item-desc" value="${escapeHtml(item.description)}" data-field="description" ${item.locked?"readonly":""}></td>
+            <td><button class="btn-sm pick-material" data-id="${item.id}">📦</button>${!item.fromMaterial ? `<button class="btn-sm collect-item" data-id="${item.id}" style="background:#d9f0ec;">📥</button>` : ''}<button class="btn-sm copy-item" data-id="${item.id}">📋</button><button class="btn-sm delete-item" data-id="${item.id}">删除</button></td>
+            </tr>`).join('')}</tbody></div><div class="space-subtotal">${escapeHtml(space.name)} 小计：¥ ${subtotal.toFixed(2)}</div>`;
+        container.appendChild(spaceDiv);
+        
+        // 事件绑定
+        let nameInp = spaceDiv.querySelector(".space-name-input");
+        let areaInp = spaceDiv.querySelector(".space-area");
+        let perInp = spaceDiv.querySelector(".space-perimeter");
+        let heightInp = spaceDiv.querySelector(".space-height");
+        let lossInp = spaceDiv.querySelector(".space-lossrate");
+        nameInp.addEventListener("change", () => { space.name = nameInp.value; saveAllDataToCloud().catch(console.error); renderAllSpaces(); renderPrintPreview(); });
+        areaInp.addEventListener("change", () => { space.area = parseFloat(areaInp.value) || 0; recalcSpaceItems(space); saveAllDataToCloud().catch(console.error); renderAllSpaces(); });
+        perInp.addEventListener("change", () => { space.perimeter = parseFloat(perInp.value) || 0; recalcSpaceItems(space); saveAllDataToCloud().catch(console.error); renderAllSpaces(); });
+        heightInp.addEventListener("change", () => { space.height = parseFloat(heightInp.value) || 0; recalcSpaceItems(space); saveAllDataToCloud().catch(console.error); renderAllSpaces(); });
+        lossInp.addEventListener("change", () => { space.lossRate = parseFloat(lossInp.value) || 0; recalcSpaceItems(space); saveAllDataToCloud().catch(console.error); renderAllSpaces(); });
+        spaceDiv.querySelector(".add-item-btn").addEventListener("click", () => { space.items.push({ id: nextItemIdGlobalSpace++, code: "", category: "", name: "新项目", unit: "项", quantity: 0, price: 0, total: 0, description: "", rule: "manual", cost: 0, fromMaterial: false, locked: false }); renumberItems(space.items); saveAllDataToCloud().catch(console.error); renderAllSpaces(); });
+        spaceDiv.querySelector(".delete-space-btn").addEventListener("click", () => { if (confirm("删除空间？")) { spaces = spaces.filter(s => s.id !== space.id); saveAllDataToCloud().catch(console.error); renderAllSpaces(); renderPrintPreview(); } });
+        spaceDiv.querySelector(".copy-space-btn").addEventListener("click", () => {
+            let newSpace = JSON.parse(JSON.stringify(space));
+            newSpace.id = nextSpaceId++;
+            newSpace.name = space.name + " (副本)";
+            newSpace.items.forEach(i => { i.id = nextItemIdGlobalSpace++; });
+            spaces.push(newSpace);
+            saveAllDataToCloud().catch(console.error); renderAllSpaces();
+            alert("空间已复制");
+        });
+        let table = spaceDiv.querySelector(".quote-item-table");
+        table.querySelectorAll(".pick-material").forEach(btn => { btn.addEventListener("click", () => { let itemId = parseInt(btn.getAttribute("data-id")); let item = space.items.find(i => i.id === itemId); if (item) showMaterialPicker((mat) => { if (mat) { item.name = mat.name; item.category = mat.category; item.unit = mat.unit; item.price = mat.price; item.description = mat.remark || ""; item.cost = mat.cost || 0; item.fromMaterial = true; item.locked = true; recalcSpaceItems(space); saveAllDataToCloud().catch(console.error); renderAllSpaces(); } }); }); });
+        table.querySelectorAll(".delete-item").forEach(btn => { btn.addEventListener("click", () => { let itemId = parseInt(btn.getAttribute("data-id")); if (confirm("删除此项目？")) { space.items = space.items.filter(i => i.id !== itemId); renumberItems(space.items); saveAllDataToCloud().catch(console.error); renderAllSpaces(); } }); });
+        table.querySelectorAll(".collect-item").forEach(btn => { btn.addEventListener("click", () => { let itemId = parseInt(btn.getAttribute("data-id")); let item = space.items.find(i => i.id === itemId); if (item && !item.fromMaterial) addToPendingFromSpace(item); else alert("来自材料库的项目无需收录"); }); });
+        table.querySelectorAll(".copy-item").forEach(btn => { btn.addEventListener("click", () => { let itemId = parseInt(btn.getAttribute("data-id")); let item = space.items.find(i => i.id === itemId); if (item) { let newItem = JSON.parse(JSON.stringify(item)); newItem.id = nextItemIdGlobalSpace++; space.items.push(newItem); renumberItems(space.items); saveAllDataToCloud().catch(console.error); renderAllSpaces(); alert("项目已复制"); } }); });
+        table.querySelectorAll(".calc-icon").forEach(icon => {
+            icon.addEventListener("click", (e) => {
+                e.stopPropagation();
+                let itemId = parseInt(icon.getAttribute("data-item-id"));
+                let item = space.items.find(i => i.id === itemId);
+                if (!item) return;
+                let modal = document.getElementById("calcModal");
+                modal.style.display = "flex";
+                let calcBtn = document.getElementById("doCalcBtn");
+                let onCalc = () => {
+                    let expr = document.getElementById("calcExpression").value.trim();
+                    if (!expr) { alert("请输入表达式"); return; }
+                    try {
+                        let result = Function('"use strict";return (' + expr + ')')();
+                        if (isNaN(result)) throw new Error();
+                        if (item.rule === "manual") item.quantity = result;
+                        else alert("当前项目规则不是手动，无法直接修改数量。请将工程量依据改为“手动”后再试。");
+                        recalcSpaceItems(space);
+                        saveAllDataToCloud().catch(console.error);
+                        renderAllSpaces();
+                        modal.style.display = "none";
+                        calcBtn.removeEventListener("click", onCalc);
+                    } catch (err) { alert("表达式无效"); }
+                };
+                calcBtn.addEventListener("click", onCalc);
+                let closeModal = () => { modal.style.display = "none"; calcBtn.removeEventListener("click", onCalc); };
+                modal.querySelector(".modal-content").querySelector("button:last-child")?.addEventListener("click", closeModal);
+            });
+        });
+        table.querySelectorAll("input, select").forEach(el => { el.addEventListener("change", (e) => { let row = e.target.closest("tr"); if (!row) return; let itemId = parseInt(row.getAttribute("data-item-id")); let item = space.items.find(i => i.id === itemId); if (!item) return; let field = e.target.getAttribute("data-field"); if (item.locked && (field === "price" || field === "description")) { if (field === "price") e.target.value = item.price; alert("来自材料库的项目不可修改"); return; } if (field === "code") item.code = e.target.value; else if (field === "category") item.category = e.target.value; else if (field === "name") item.name = e.target.value; else if (field === "unit") item.unit = e.target.value; else if (field === "rule") { item.rule = e.target.value; recalcSpaceItems(space); } else if (field === "quantity") { if (item.rule === "manual") item.quantity = parseFloat(e.target.value) || 0; recalcSpaceItems(space); } else if (field === "price") item.price = parseFloat(e.target.value) || 0; else if (field === "description") item.description = e.target.value; recalcSpaceItems(space); saveAllDataToCloud().catch(console.error); renderAllSpaces(); }); });
+        
+        const tbl = spaceDiv.querySelector(".quote-item-table");
+        if (tbl) enableTableColumnResize(tbl, `space_${space.id}`);
+    });
+    updateSummary(); updateProfitAnalysis(); renderPrintPreview(); saveHistorySnapshotAuto();
+}
+
+function addToPendingFromSpace(item) {
+    if (pendingMaterials.some(m => m.name === item.name && m.unit === item.unit)) { alert("该材料已在待收录库中"); return; }
+    let newId = nextPendingId++;
+    pendingMaterials.push({ id: newId, code: item.code || "", category: item.category || "", name: item.name, unit: item.unit, price: item.price, cost: item.cost || (item.price * MANUAL_COST_RATE), remark: item.description || "" });
+    saveAllDataToCloud().catch(console.error);
+    renderPendingMaterials();
+    alert(`已收录“${item.name}”到待收录材料库。`);
+}
+
+function showMaterialPicker(callback) {
+    let modal = document.getElementById("materialSelectModal");
+    let all = [];
+    materialLibs.forEach(lib => { lib.materials.forEach(mat => { all.push({ ...mat, libName: lib.name }); }); });
+    let libFilter = document.getElementById("materialLibFilter");
+    let catFilter = document.getElementById("materialCategoryFilter");
+    let search = document.getElementById("materialSearchInput");
+    let listDiv = document.getElementById("modalMaterialList");
+    let libNames = [...new Set(all.map(m => m.libName))];
+    libFilter.innerHTML = '<option value="">所有库</option>' + libNames.map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('');
+    let cats = [...new Set(all.map(m => m.category).filter(c => c))];
+    catFilter.innerHTML = '<option value="">所有类别</option>' + cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    function render() {
+        let filtered = all;
+        if (libFilter.value) filtered = filtered.filter(m => m.libName === libFilter.value);
+        if (catFilter.value) filtered = filtered.filter(m => m.category === catFilter.value);
+        if (search.value.trim()) filtered = filtered.filter(m => m.name.toLowerCase().includes(search.value.trim().toLowerCase()));
+        listDiv.innerHTML = "";
+        filtered.forEach(mat => {
+            let div = document.createElement("div"); div.className = "material-item";
+            div.innerHTML = `<span class="material-category">${escapeHtml(mat.category || '其他')}</span><strong>${escapeHtml(mat.name)}</strong> | ¥${mat.price} | ${mat.unit}<span class="lib-badge">📁 ${escapeHtml(mat.libName)}</span>`;
+            div.onclick = () => { modal.style.display = "none"; callback(mat); };
+            listDiv.appendChild(div);
+        });
+    }
+    libFilter.onchange = render; catFilter.onchange = render; search.oninput = render; render();
+    modal.style.display = "flex"; document.getElementById("closeModalBtn").onclick = () => modal.style.display = "none";
+}
+
+// ==================== 项目模板渲染（单空间 + 整套） ====================
+function recalcTemplateItems(tpl) {
+    tpl.items.forEach(item => {
+        let qty = 0;
+        if (item.rule === "manual") qty = item.quantity;
+        else if (item.rule === "area") qty = tpl.area;
+        else if (item.rule === "wall") qty = tpl.perimeter * tpl.height;
+        else if (item.rule === "perimeter") qty = tpl.perimeter;
+        item.quantity = qty;
+        let actualQty = (item.fromMaterial && tpl.lossRate) ? qty * (1 + tpl.lossRate / 100) : qty;
+        item.total = actualQty * item.price;
+    });
+}
+function recalcWholeSpaceItems(space) {
+    if (!space.items) space.items = [];
+    space.items.forEach(item => {
+        let qty = 0;
+        if (item.rule === "manual") qty = item.quantity;
+        else if (item.rule === "area") qty = space.area;
+        else if (item.rule === "wall") qty = space.perimeter * space.height;
+        else if (item.rule === "perimeter") qty = space.perimeter;
+        item.quantity = qty;
+        let actualQty = (item.fromMaterial && space.lossRate) ? qty * (1 + space.lossRate / 100) : qty;
+        item.total = actualQty * item.price;
+    });
+}
+function renderTemplates() {
+    const container = document.getElementById("templatesContainer");
+    if (!container) return;
+    container.innerHTML = "";
+    let filtered = templates.filter(t => t.type === currentTemplateType);
+    filtered.forEach(tpl => {
+        let card = document.createElement("div"); card.className = "template-card";
+        if (currentTemplateType === "single") {
+            recalcTemplateItems(tpl);
+            let subtotal = tpl.items.reduce((s, i) => s + i.total, 0);
+            card.innerHTML = `<div class="template-header">
+                <input type="text" class="template-name-input" value="${escapeHtml(tpl.name)}">
+                <div class="template-dimensions" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center;">
+                    <div class="dim-item"><label>面积:</label><input type="number" class="template-area" value="${tpl.area}" step="0.1"></div>
+                    <div class="dim-item"><label>周长:</label><input type="number" class="template-perimeter" value="${tpl.perimeter}" step="0.1"></div>
+                    <div class="dim-item"><label>层高:</label><input type="number" class="template-height" value="${tpl.height}" step="0.05"></div>
+                    <div class="dim-item"><label>主材损耗率(%):</label><input type="number" class="template-lossrate" value="${tpl.lossRate || 0}" step="0.1"></div>
+                    <button class="btn-sm add-template-item-btn" style="margin-left: 8px;">➕ 新增项目</button>
+                    <button class="btn-sm delete-template-btn" style="background:#fee2e2;">🗑️ 删除模板</button>
+                </div>
+            </div>
+            <div class="item-table-wrapper">
+                <table class="editable-table template-item-table">
+                    <thead><tr><th>编号</th><th>类别</th><th>施工项目</th><th>单位</th><th>工程量依据</th><th>数量(示例)</th><th>单价</th><th>合计</th><th>施工说明</th><th>操作</th></tr></thead>
+                    <tbody>${tpl.items.map(item => `<tr data-item-id="${item.id}">
+                        <td><input type="text" class="item-code" value="${escapeHtml(item.code)}" data-field="code"></td>
+                        <td><input type="text" class="item-category" value="${escapeHtml(item.category||'')}" data-field="category"></td>
+                        <td><input type="text" class="item-name" value="${escapeHtml(item.name)}" data-field="name"></td>
+                        <td><input type="text" class="item-unit" value="${escapeHtml(item.unit)}" data-field="unit"></td>
+                        <td><select class="rule-select" data-field="rule"><option value="manual" ${item.rule==="manual"?"selected":""}>手动</option><option value="area" ${item.rule==="area"?"selected":""}>地面面积</option><option value="wall" ${item.rule==="wall"?"selected":""}>墙面(周长×高)</option><option value="perimeter" ${item.rule==="perimeter"?"selected":""}>周长</option></select></td>
+                        <td><input type="number" step="0.01" class="item-qty" value="${item.quantity.toFixed(2)}" data-field="quantity" ${item.rule!=="manual"?"readonly style='background:#f3f4f6'":""}></td>
+                        <td><input type="number" step="0.5" class="item-price" value="${item.price}" data-field="price"></td>
+                        <td class="item-total">${item.total.toFixed(2)}</td>
+                        <td><input type="text" class="item-desc" value="${escapeHtml(item.description)}" data-field="description"></td>
+                        <td><button class="btn-sm pick-material-tpl" data-id="${item.id}">📦</button><button class="btn-sm delete-item-tpl" data-id="${item.id}">删除</button></td>
+                    </tr>`).join('')}</tbody>
+                </table>
+            </div>
+            <div class="template-subtotal">模板小计：¥ ${subtotal.toFixed(2)}</div>`;
+            container.appendChild(card);
+            let nameInp = card.querySelector(".template-name-input");
+            let areaInp = card.querySelector(".template-area");
+            let perInp = card.querySelector(".template-perimeter");
+            let heightInp = card.querySelector(".template-height");
+            let lossInp = card.querySelector(".template-lossrate");
+            nameInp.onchange = () => { tpl.name = nameInp.value; saveAllDataToCloud().catch(console.error); renderTemplates(); };
+            areaInp.onchange = () => { tpl.area = parseFloat(areaInp.value) || 0; recalcTemplateItems(tpl); saveAllDataToCloud().catch(console.error); renderTemplates(); };
+            perInp.onchange = () => { tpl.perimeter = parseFloat(perInp.value) || 0; recalcTemplateItems(tpl); saveAllDataToCloud().catch(console.error); renderTemplates(); };
+            heightInp.onchange = () => { tpl.height = parseFloat(heightInp.value) || 0; recalcTemplateItems(tpl); saveAllDataToCloud().catch(console.error); renderTemplates(); };
+            lossInp.onchange = () => { tpl.lossRate = parseFloat(lossInp.value) || 0; recalcTemplateItems(tpl); saveAllDataToCloud().catch(console.error); renderTemplates(); };
+            card.querySelector(".add-template-item-btn").onclick = () => { tpl.items.push({ id: nextTemplateItemId++, code: "", category: "", name: "新项目", unit: "项", quantity: 0, price: 0, total: 0, description: "", rule: "manual", cost: 0, fromMaterial: false, locked: false }); saveAllDataToCloud().catch(console.error); renderTemplates(); };
+            card.querySelector(".delete-template-btn").onclick = () => { if (confirm(`删除模板“${tpl.name}”？`)) { templates = templates.filter(t => t.id !== tpl.id); saveAllDataToCloud().catch(console.error); renderTemplates(); } };
+            card.querySelectorAll(".pick-material-tpl").forEach(btn => { btn.onclick = () => { let itemId = parseInt(btn.getAttribute("data-id")); let item = tpl.items.find(i => i.id === itemId); if (item) showMaterialPicker((mat) => { if (mat) { item.name = mat.name; item.category = mat.category; item.unit = mat.unit; item.price = mat.price; item.description = mat.remark || ""; item.cost = mat.cost || 0; item.fromMaterial = true; recalcTemplateItems(tpl); saveAllDataToCloud().catch(console.error); renderTemplates(); } }); }; });
+            card.querySelectorAll(".delete-item-tpl").forEach(btn => { btn.onclick = () => { let itemId = parseInt(btn.getAttribute("data-id")); tpl.items = tpl.items.filter(i => i.id !== itemId); saveAllDataToCloud().catch(console.error); renderTemplates(); }; });
+            card.querySelectorAll(".template-item-table input, .template-item-table select").forEach(el => { el.addEventListener("change", (e) => { let row = e.target.closest("tr"); let itemId = parseInt(row.getAttribute("data-item-id")); let item = tpl.items.find(i => i.id === itemId); if (!item) return; let field = e.target.getAttribute("data-field"); if (field === "code") item.code = e.target.value; else if (field === "category") item.category = e.target.value; else if (field === "name") item.name = e.target.value; else if (field === "unit") item.unit = e.target.value; else if (field === "rule") { item.rule = e.target.value; recalcTemplateItems(tpl); } else if (field === "quantity") { if (item.rule === "manual") item.quantity = parseFloat(e.target.value) || 0; recalcTemplateItems(tpl); } else if (field === "price") item.price = parseFloat(e.target.value) || 0; else if (field === "description") item.description = e.target.value; item.total = item.quantity * item.price; saveAllDataToCloud().catch(console.error); renderTemplates(); }); });
+            const tbl = card.querySelector(".template-item-table");
+            if (tbl) enableTableColumnResize(tbl, `template_single_${tpl.id}`);
+        } else {
+            // 整套户型模板
+            card.innerHTML = `<div class="template-header">
+                <input type="text" class="template-name-input" value="${escapeHtml(tpl.name)}">
+                <button class="btn-sm delete-template-btn" style="background:#fee2e2; margin-left: auto;">🗑️ 删除模板</button>
+            </div>
+            <div id="wholeTemplateSpaces_${tpl.id}"></div>`;
+            let spacesContainer = card.querySelector(`#wholeTemplateSpaces_${tpl.id}`);
+            spacesContainer.innerHTML = "";
+            (tpl.spaces || []).forEach((space, idx) => {
+                recalcWholeSpaceItems(space);
+                let spaceDiv = document.createElement("div"); spaceDiv.style.marginBottom = "16px"; spaceDiv.style.border = "1px solid #e2e8f0"; spaceDiv.style.padding = "12px"; spaceDiv.style.borderRadius = "16px";
+                spaceDiv.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <strong>${escapeHtml(space.name)}</strong>
+                        <button class="btn-sm remove-whole-space" data-idx="${idx}" style="background:#fee2e2;">删除</button>
+                    </div>
+                    <div class="space-dimensions" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-top: 8px;">
+                        <div class="dim-item"><label>面积:</label><input type="number" class="whole-space-area" data-idx="${idx}" value="${space.area}" step="0.1"></div>
+                        <div class="dim-item"><label>周长:</label><input type="number" class="whole-space-perimeter" data-idx="${idx}" value="${space.perimeter}" step="0.1"></div>
+                        <div class="dim-item"><label>层高:</label><input type="number" class="whole-space-height" data-idx="${idx}" value="${space.height}" step="0.05"></div>
+                        <div class="dim-item"><label>主材损耗率(%):</label><input type="number" class="whole-space-lossrate" data-idx="${idx}" value="${space.lossRate || 0}" step="0.1"></div>
+                        <button class="btn-sm add-whole-item-btn" data-idx="${idx}">➕ 新增项目</button>
+                    </div>
+                    <div class="item-table-wrapper" style="margin-top: 12px;">
+                        <table class="editable-table whole-item-table" data-idx="${idx}">
+                            <thead><tr><th>编号</th><th>类别</th><th>施工项目</th><th>单位</th><th>工程量依据</th><th>数量</th><th>单价</th><th>合计</th><th>施工说明</th><th>操作</th></tr></thead>
+                            <tbody>${(space.items || []).map(item => `<tr data-item-id="${item.id}">
+                                <td><input type="text" class="item-code" value="${escapeHtml(item.code)}" data-field="code"></td>
+                                <td><input type="text" class="item-category" value="${escapeHtml(item.category||'')}" data-field="category"></td>
+                                <td><input type="text" class="item-name" value="${escapeHtml(item.name)}" data-field="name"></td>
+                                <td><input type="text" class="item-unit" value="${escapeHtml(item.unit)}" data-field="unit"></td>
+                                <td><select class="rule-select" data-field="rule"><option value="manual" ${item.rule==="manual"?"selected":""}>手动</option><option value="area" ${item.rule==="area"?"selected":""}>地面面积</option><option value="wall" ${item.rule==="wall"?"selected":""}>墙面(周长×高)</option><option value="perimeter" ${item.rule==="perimeter"?"selected":""}>周长</option></select></td>
+                                <td><input type="number" step="0.01" class="item-qty" value="${item.quantity.toFixed(2)}" data-field="quantity"></td>
+                                <td><input type="number" step="0.5" class="item-price" value="${item.price}" data-field="price"></td>
+                                <td class="item-total">${(item.total || 0).toFixed(2)}</td>
+                                <td><input type="text" class="item-desc" value="${escapeHtml(item.description)}" data-field="description"></td>
+                                <td><button class="btn-sm pick-material-whole" data-idx="${idx}" data-id="${item.id}">📦</button><button class="btn-sm delete-item-whole" data-idx="${idx}" data-id="${item.id}">删除</button></td>
+                            </tr>`).join('')}</tbody>
+                        </table>
+                    </div>
+                `;
+                spacesContainer.appendChild(spaceDiv);
+                let areaInp = spaceDiv.querySelector(".whole-space-area");
+                let perInp = spaceDiv.querySelector(".whole-space-perimeter");
+                let heightInp = spaceDiv.querySelector(".whole-space-height");
+                let lossInp = spaceDiv.querySelector(".whole-space-lossrate");
+                areaInp.addEventListener("change", () => { space.area = parseFloat(areaInp.value) || 0; recalcWholeSpaceItems(space); saveAllDataToCloud().catch(console.error); renderTemplates(); });
+                perInp.addEventListener("change", () => { space.perimeter = parseFloat(perInp.value) || 0; recalcWholeSpaceItems(space); saveAllDataToCloud().catch(console.error); renderTemplates(); });
+                heightInp.addEventListener("change", () => { space.height = parseFloat(heightInp.value) || 0; recalcWholeSpaceItems(space); saveAllDataToCloud().catch(console.error); renderTemplates(); });
+                lossInp.addEventListener("change", () => { space.lossRate = parseFloat(lossInp.value) || 0; recalcWholeSpaceItems(space); saveAllDataToCloud().catch(console.error); renderTemplates(); });
+                let addItemBtn = spaceDiv.querySelector(".add-whole-item-btn");
+                addItemBtn.onclick = () => { if (!space.items) space.items = []; space.items.push({ id: nextTemplateItemId++, code: "", category: "", name: "新项目", unit: "项", quantity: 0, price: 0, total: 0, description: "", rule: "manual", cost: 0, fromMaterial: false, locked: false }); saveAllDataToCloud().catch(console.error); renderTemplates(); };
+                let removeBtn = spaceDiv.querySelector(".remove-whole-space");
+                removeBtn.onclick = () => { tpl.spaces.splice(idx, 1); saveAllDataToCloud().catch(console.error); renderTemplates(); };
+                spaceDiv.querySelectorAll(".pick-material-whole").forEach(btn => { btn.onclick = () => { let itemId = parseInt(btn.getAttribute("data-id")); let item = space.items.find(i => i.id === itemId); if (item) showMaterialPicker((mat) => { if (mat) { item.name = mat.name; item.category = mat.category; item.unit = mat.unit; item.price = mat.price; item.description = mat.remark || ""; item.cost = mat.cost || 0; item.fromMaterial = true; item.locked = true; saveAllDataToCloud().catch(console.error); renderTemplates(); } }); }; });
+                spaceDiv.querySelectorAll(".delete-item-whole").forEach(btn => { btn.onclick = () => { let itemId = parseInt(btn.getAttribute("data-id")); space.items = space.items.filter(i => i.id !== itemId); saveAllDataToCloud().catch(console.error); renderTemplates(); }; });
+                spaceDiv.querySelectorAll(".whole-item-table input, .whole-item-table select").forEach(el => { el.addEventListener("change", (e) => { let row = e.target.closest("tr"); let itemId = parseInt(row.getAttribute("data-item-id")); let item = space.items.find(i => i.id === itemId); if (!item) return; let field = e.target.getAttribute("data-field"); if (field === "code") item.code = e.target.value; else if (field === "category") item.category = e.target.value; else if (field === "name") item.name = e.target.value; else if (field === "unit") item.unit = e.target.value; else if (field === "rule") { item.rule = e.target.value; recalcWholeSpaceItems(space); } else if (field === "quantity") { if (item.rule === "manual") item.quantity = parseFloat(e.target.value) || 0; recalcWholeSpaceItems(space); } else if (field === "price") item.price = parseFloat(e.target.value) || 0; else if (field === "description") item.description = e.target.value; item.total = item.quantity * item.price; saveAllDataToCloud().catch(console.error); renderTemplates(); }); });
+                const subTbl = spaceDiv.querySelector(".whole-item-table");
+                if (subTbl) enableTableColumnResize(subTbl, `template_whole_${tpl.id}_space_${idx}`);
+            });
+            card.querySelector(".delete-template-btn").onclick = () => { if (confirm(`删除模板“${tpl.name}”？`)) { templates = templates.filter(t => t.id !== tpl.id); saveAllDataToCloud().catch(console.error); renderTemplates(); } };
+            card.querySelector(".template-name-input").onchange = () => { tpl.name = card.querySelector(".template-name-input").value; saveAllDataToCloud().catch(console.error); renderTemplates(); };
+        }
+        container.appendChild(card);
+    });
+}
+function addNewTemplate() { let newId = nextTemplateId++; let newTpl = currentTemplateType === "single" ? { id: newId, name: `新模板${newId}`, type: "single", area: 10, perimeter: 12, height: 2.6, lossRate: 5, items: [] } : { id: newId, name: `新户型${newId}`, type: "whole", spaces: [] }; templates.push(newTpl); saveAllDataToCloud().catch(console.error); renderTemplates(); }
+function addSpaceFromTemplate() {
+    let modal = document.getElementById("templateSelectModal");
+    let listDiv = document.getElementById("templateListModal");
+    listDiv.innerHTML = "";
+    templates.forEach(tpl => {
+        let div = document.createElement("div"); div.className = "template-list-item";
+        div.innerHTML = `<strong>${escapeHtml(tpl.name)}</strong> (${tpl.type === "single" ? "单空间" : "整套户型"})`;
+        div.onclick = () => {
+            modal.style.display = "none";
+            if (tpl.type === "single") {
+                let newSpace = { id: nextSpaceId++, name: tpl.name, area: tpl.area, perimeter: tpl.perimeter, height: tpl.height, lossRate: tpl.lossRate || 0, items: tpl.items.map(item => ({ ...item, id: nextItemIdGlobalSpace++, fromMaterial: item.fromMaterial || false, locked: item.locked || false })) };
+                recalcSpaceItems(newSpace); spaces.push(newSpace); saveAllDataToCloud().catch(console.error); renderAllSpaces();
+            } else {
+                let wholeModal = document.getElementById("wholeTemplateSelectModal");
+                let listContainer = document.getElementById("wholeSpaceListModal");
+                listContainer.innerHTML = "";
+                tpl.spaces.forEach((space, idx) => {
+                    let div2 = document.createElement("div"); div2.className = "whole-space-check-item";
+                    div2.innerHTML = `<input type="checkbox" class="whole-space-checkbox" data-idx="${idx}" checked> <label>${escapeHtml(space.name)}</label>`;
+                    listContainer.appendChild(div2);
+                });
+                wholeModal.style.display = "flex";
+                let confirmBtn = document.getElementById("confirmWholeTemplateBtn");
+                let cancelBtn = document.getElementById("cancelWholeTemplateBtn");
+                let onConfirm = () => {
+                    let checkboxes = document.querySelectorAll("#wholeSpaceListModal .whole-space-checkbox:checked");
+                    checkboxes.forEach(cb => {
+                        let idx = parseInt(cb.getAttribute("data-idx"));
+                        let spaceTemplate = tpl.spaces[idx];
+                        let newSpace = { id: nextSpaceId++, name: spaceTemplate.name, area: spaceTemplate.area, perimeter: spaceTemplate.perimeter, height: spaceTemplate.height, lossRate: spaceTemplate.lossRate || 0, items: (spaceTemplate.items || []).map(item => ({ ...item, id: nextItemIdGlobalSpace++, fromMaterial: item.fromMaterial || false, locked: item.locked || false })) };
+                        recalcSpaceItems(newSpace); spaces.push(newSpace);
+                    });
+                    saveAllDataToCloud().catch(console.error); renderAllSpaces();
+                    wholeModal.style.display = "none";
+                    confirmBtn.removeEventListener("click", onConfirm);
+                    cancelBtn.removeEventListener("click", onCancel);
+                };
+                let onCancel = () => { wholeModal.style.display = "none"; confirmBtn.removeEventListener("click", onConfirm); cancelBtn.removeEventListener("click", onCancel); };
+                confirmBtn.addEventListener("click", onConfirm);
+                cancelBtn.addEventListener("click", onCancel);
+            }
+        };
+        listDiv.appendChild(div);
+    });
+    if (templates.length === 0) listDiv.innerHTML = "<p>暂无模板</p>";
+    modal.style.display = "flex";
+    document.getElementById("closeTemplateModalBtn").onclick = () => modal.style.display = "none";
+}
+
+// ==================== 费用汇总 / 利润分析 ====================
+function updateSummary() {
+    let direct = getDirectCostForSpaces(spaces);
+    let design = getDesignFee(); let drawing = getDrawingFee(); let manage = getManagementFeeForSpaces(direct); let tax = getTaxForSpaces(direct, manage); let total = getTotalQuoteForSpaces(direct, design, drawing, manage, tax);
+    document.getElementById("summaryArea").innerHTML = `<div class="summary-row"><span>直接费用小计</span><span>¥ ${direct.toFixed(2)}</span></div>
+        <div class="summary-row"><span>设计费 (¥<input type="number" id="designFeePerM2Input" value="${feeSettings.designFeePerM2}" step="1" style="width:70px;"> / m²) × <span id="totalAreaDisplay">${projectInfo.totalArea}</span> m²</span><span>¥ ${design.toFixed(2)}</span></div>
+        <div class="summary-row"><span>绘图费 ¥<input type="number" id="drawingFeeInput" value="${feeSettings.drawingFee}" step="100" style="width:100px;"></span><span>¥ ${drawing.toFixed(2)}</span></div>
+        <div class="summary-row"><span>管理费 <input type="number" id="managementRateInput" value="${feeSettings.managementRate}" step="0.5" style="width:60px;">% (直接费用)</span><span>¥ ${manage.toFixed(2)}</span></div>
+        <div class="summary-row"><span>税金 <input type="number" id="taxRateInput" value="${feeSettings.taxRate}" step="0.1" style="width:60px;">% (直接费用+管理费)</span><span>¥ ${tax.toFixed(2)}</span></div>
+        <div class="summary-row total"><span>费用汇总</span><span>¥ ${total.toFixed(2)}</span></div>`;
+    let dInput = document.getElementById("designFeePerM2Input"); let drInput = document.getElementById("drawingFeeInput"); let mInput = document.getElementById("managementRateInput"); let tInput = document.getElementById("taxRateInput");
+    if (dInput) dInput.onchange = () => { feeSettings.designFeePerM2 = parseFloat(dInput.value) || 0; saveAllDataToCloud().catch(console.error); updateSummary(); updateProfitAnalysis(); renderPrintPreview(); };
+    if (drInput) drInput.onchange = () => { feeSettings.drawingFee = parseFloat(drInput.value) || 0; saveAllDataToCloud().catch(console.error); updateSummary(); updateProfitAnalysis(); renderPrintPreview(); };
+    if (mInput) mInput.onchange = () => { feeSettings.managementRate = parseFloat(mInput.value) || 0; saveAllDataToCloud().catch(console.error); updateSummary(); updateProfitAnalysis(); renderPrintPreview(); };
+    if (tInput) tInput.onchange = () => { feeSettings.taxRate = parseFloat(tInput.value) || 0; saveAllDataToCloud().catch(console.error); updateSummary(); updateProfitAnalysis(); renderPrintPreview(); };
+}
+function updateProfitAnalysis() {
+    let direct = getDirectCostForSpaces(spaces);
+    let design = getDesignFee(); let drawing = getDrawingFee(); let manage = getManagementFeeForSpaces(direct); let tax = getTaxForSpaces(direct, manage);
+    let totalQuote = getTotalQuoteForSpaces(direct, design, drawing, manage, tax);
+    let totalCost = getTotalCostForSpaces(spaces) + design + drawing;
+    let profit = totalQuote - totalCost; let margin = totalQuote > 0 ? (profit / totalQuote * 100) : 0;
+    let suggested = totalQuote;
+    if (targetNetProfit !== null && targetNetProfit > 0) suggested = totalCost + targetNetProfit;
+    else if (targetGrossMargin > 0 && targetGrossMargin < 100) suggested = totalCost / (1 - targetGrossMargin / 100);
+    let gap = suggested - totalQuote;
+    let grid = document.getElementById("profitGrid");
+    if (grid) grid.innerHTML = `<div class="profit-item"><label>报价总额</label><div class="value">¥ ${totalQuote.toFixed(2)}</div></div>
+        <div class="profit-item"><label>成本总额</label><div class="value">¥ ${totalCost.toFixed(2)}</div><div class="cost-note">* 含损耗、辅材</div></div>
+        <div class="profit-item"><label>毛利金额</label><div class="value">¥ ${profit.toFixed(2)}</div></div>
+        <div class="profit-item"><label>当前毛利率</label><div class="value">${margin.toFixed(2)}%</div></div>
+        <div class="profit-item"><label>目标毛利率 <input type="number" id="targetMarginInput" value="${targetGrossMargin}" step="1" style="width:70px;"> %</label><div class="value small">建议报价: ¥ ${suggested.toFixed(2)}</div><div class="value small">差额: ${gap >= 0 ? '+' : ''}¥ ${gap.toFixed(2)}</div></div>
+        <div class="profit-item"><label>目标净利润额 <button id="setTargetProfitBtnSmall" class="btn-sm">设置</button></label><div class="value small">当前: ${targetNetProfit !== null ? '¥' + targetNetProfit : '未设置'}</div></div>`;
+    let marginInput = document.getElementById("targetMarginInput");
+    if (marginInput) marginInput.onchange = () => { targetGrossMargin = parseFloat(marginInput.value) || 0; targetNetProfit = null; saveAllDataToCloud().catch(console.error); updateProfitAnalysis(); renderPrintPreview(); };
+    let setBtn = document.getElementById("setTargetProfitBtnSmall");
+    if (setBtn) setBtn.onclick = () => document.getElementById("targetProfitModal").style.display = "flex";
+}
+function batchAdjustPrice(percent) {
+    let factor = 1 + percent / 100;
+    spaces.forEach(space => {
+        space.items.forEach(item => { if (!item.locked) item.price = parseFloat((item.price * factor).toFixed(2)); });
+        recalcSpaceItems(space);
+    });
+    saveAllDataToCloud().catch(console.error); renderAllSpaces();
+    alert(`价格已${percent>=0?'上浮':'下浮'} ${Math.abs(percent)}%`);
+}
+
+// ==================== 打印预览（完整版） ====================
+function renderPrintPreview() {
+    const container = document.getElementById("printPreviewArea");
+    if (!container) return;
+    const showProjectInfo = document.getElementById("showProjectInfo")?.checked ?? true;
+    const showSpaceSubtotal = document.getElementById("showSpaceSubtotal")?.checked ?? true;
+    const showSummary = document.getElementById("showSummary")?.checked ?? true;
+    const showProfit = document.getElementById("showProfit")?.checked ?? false;
+    const showSignature = document.getElementById("showSignature")?.checked ?? true;
+    const showQuoteRemark = document.getElementById("showQuoteRemark")?.checked ?? true;
+    const hideZeroItems = document.getElementById("hideZeroItems")?.checked ?? false;
+    const showMaterialSummary = document.getElementById("showMaterialSummary")?.checked ?? false;
+    const paperDirection = document.getElementById("paperDirection")?.value ?? "portrait";
+    const fontSize = document.getElementById("fontSize")?.value ?? "medium";
+    const textAlign = document.getElementById("textAlign")?.value ?? "left";
+    const verticalAlign = document.getElementById("verticalAlign")?.value ?? "top";
+    const fontClass = `font-${fontSize}`;
+    const rowHeight = currentRowHeight + 'em';
+    const headerLogo = document.getElementById("headerLogoUrl")?.value || "";
+    const footerText = document.getElementById("footerText")?.value || "";
+    const watermarkText = document.getElementById("watermarkText")?.value || "";
+    const enableWatermark = document.getElementById("enableWatermark")?.checked || false;
+    let selectedSpaces = spaces;
+    const checkboxes = document.querySelectorAll('.export-space-checkbox:checked');
+    if (checkboxes.length > 0) {
+        const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+        selectedSpaces = spaces.filter(s => selectedIds.includes(s.id));
+    }
+    let selectedColumns = ["code", "category", "name", "unit", "quantity", "price", "total", "description"];
+    const colCheckboxes = document.querySelectorAll('.export-column-checkbox:checked');
+    if (colCheckboxes.length > 0) {
+        selectedColumns = Array.from(colCheckboxes).map(cb => cb.value);
+    }
+    const columnLabels = { code:"编号", category:"类别", name:"施工项目", unit:"单位", quantity:"数量", price:"单价(元)", total:"合计(元)", description:"施工说明" };
+    let html = `<div class="print-area ${fontClass}" style="max-width: ${paperDirection === 'landscape' ? '297mm' : '210mm'}; margin:0 auto; position:relative;">`;
+    if (enableWatermark && watermarkText) html += `<div class="watermark" style="position:fixed; opacity:0.1; font-size:60px; transform:rotate(-30deg); top:30%; left:0; width:100%; text-align:center; pointer-events:none;">${escapeHtml(watermarkText)}</div>`;
+    if (headerLogo) html += `<div style="text-align:center; margin-bottom:10px;"><img src="${escapeHtml(headerLogo)}" style="max-height:80px;"></div>`;
+    html += `<div><div class="print-title-input">${escapeHtml(quoteTitleSettings.companyName)} ${escapeHtml(quoteTitleSettings.titleSuffix)}</div></div>`;
+    if (showProjectInfo) {
+        html += `<div class="print-info">
+            <div><strong>项目名称：</strong> ${escapeHtml(projectInfo.projectName)}</div>
+            <div><strong>客户姓名：</strong> ${escapeHtml(projectInfo.customerName)}</div>
+            <div><strong>联系电话：</strong> ${escapeHtml(projectInfo.customerPhone)}</div>
+            <div><strong>设计师：</strong> ${escapeHtml(projectInfo.designerName)}</div>
+            <div><strong>装修地址：</strong> ${escapeHtml(projectInfo.address)}</div>
+            <div><strong>户型：</strong> ${escapeHtml(projectInfo.houseType)}</div>
+            <div><strong>计价面积：</strong> ${projectInfo.totalArea} m²</div>
+        </div>`;
+    }
+    if (showQuoteRemark && projectInfo.quoteRemark) {
+        html += `<div class="print-quote-remark"><strong>📝 报价说明：</strong><br>${escapeHtml(projectInfo.quoteRemark).replace(/\n/g, '<br>')}</div>`;
+    }
+    let materialSummary = {};
+    selectedSpaces.forEach(space => {
+        let itemsToShow = space.items;
+        if (hideZeroItems) itemsToShow = itemsToShow.filter(item => item.total !== 0);
+        const spaceTotal = itemsToShow.reduce((s,i)=>s+i.total,0);
+        html += `<div style="margin-bottom: 24px;">
+            <h3 style="margin: 12px 0 8px 0; padding-bottom: 6px; border-bottom: 2px solid #cbd5e1;">${escapeHtml(space.name)}</h3>
+            <div style="font-size: 0.8rem; color: #5f6c84; margin-bottom: 10px;">面积: ${space.area} m² | 周长: ${space.perimeter} m | 层高: ${space.height} m | 主材损耗率: ${space.lossRate || 0}%</div>
+            <table class="print-table" style="width:100%; table-layout: auto; border-collapse: collapse;">
+                <thead><tr>`;
+        selectedColumns.forEach(col => {
+            let widthStyle = currentColWidths[col] ? `width: ${currentColWidths[col]}px;` : '';
+            html += `<th style="${widthStyle} text-align: ${textAlign}; vertical-align: ${verticalAlign}; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 8px 6px;">${columnLabels[col] || col}<div class="resize-handle" data-col="${col}"></div></th>`;
+        });
+        html += `</thead><tbody>`;
+        itemsToShow.forEach(item => {
+            if (showMaterialSummary && item.category) {
+                if (!materialSummary[item.category]) materialSummary[item.category] = { qty: 0, total: 0 };
+                materialSummary[item.category].qty += item.quantity;
+                materialSummary[item.category].total += item.total;
+            }
+            html += `<tr style="min-height: ${rowHeight};">`;
+            selectedColumns.forEach(col => {
+                let val = "";
+                if (col === "code") val = item.code;
+                else if (col === "category") val = item.category;
+                else if (col === "name") val = item.name;
+                else if (col === "unit") val = item.unit;
+                else if (col === "quantity") val = item.quantity.toFixed(2);
+                else if (col === "price") val = `¥${item.price.toFixed(2)}`;
+                else if (col === "total") val = `¥${item.total.toFixed(2)}`;
+                else if (col === "description") val = item.description;
+                html += `<td style="white-space: normal; word-break: break-word; text-align: ${textAlign}; vertical-align: ${verticalAlign}; border: 1px solid #cbd5e1; padding: 8px 6px;">${escapeHtml(String(val))}</td>`;
+            });
+            html += `</tr>`;
+        });
+        html += `</tbody></table>`;
+        if (showSpaceSubtotal) {
+            html += `<div style="text-align: right; margin-top: 8px; font-weight: bold;">${escapeHtml(space.name)} 小计：¥ ${spaceTotal.toFixed(2)}</div>`;
+        }
+        html += `</div>`;
+    });
+    if (showMaterialSummary && Object.keys(materialSummary).length) {
+        html += `<div style="margin-top:20px; padding:12px; background:#f8fafc; border-radius:12px;"><h4>材料分类汇总</h4><table class="print-table"><thead><tr><th>类别</th><th>总数量</th><th>总金额(元)</th></tr></thead><tbody>`;
+        for (let cat in materialSummary) {
+            html += `<tr><td>${escapeHtml(cat)}</td><td>${materialSummary[cat].qty.toFixed(2)}</td><td>¥ ${materialSummary[cat].total.toFixed(2)}</td></tr>`;
+        }
+        html += `</tbody></div>`;
+    }
+    if (showSummary) {
+        const directCost = getDirectCostForSpaces(selectedSpaces);
+        const designFee = getDesignFee();
+        const drawingFee = getDrawingFee();
+        const managementFee = getManagementFeeForSpaces(directCost);
+        const tax = getTaxForSpaces(directCost, managementFee);
+        const totalQuote = getTotalQuoteForSpaces(directCost, designFee, drawingFee, managementFee, tax);
+        html += `<div style="margin-top: 20px; padding: 12px; background: #f8fafc; border-radius: 12px;">
+            <div style="display: flex; justify-content: space-between; padding: 6px 0;"><span>直接费用小计：</span><span>¥ ${directCost.toFixed(2)}</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 6px 0;"><span>设计费：</span><span>¥ ${designFee.toFixed(2)}</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 6px 0;"><span>绘图费：</span><span>¥ ${drawingFee.toFixed(2)}</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 6px 0;"><span>管理费 (${feeSettings.managementRate}%)：</span><span>¥ ${managementFee.toFixed(2)}</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 6px 0;"><span>税金 (${feeSettings.taxRate}%)：</span><span>¥ ${tax.toFixed(2)}</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 6px 0; font-weight: 800; font-size: 1.1rem; border-top: 2px solid #cbd5e1; margin-top: 6px; padding-top: 10px;"><span>费用汇总：</span><span>¥ ${totalQuote.toFixed(2)}</span></div>
+        </div>`;
+    }
+    if (showProfit) {
+        const directCost = getDirectCostForSpaces(selectedSpaces);
+        const designFee = getDesignFee();
+        const drawingFee = getDrawingFee();
+        const managementFee = getManagementFeeForSpaces(directCost);
+        const tax = getTaxForSpaces(directCost, managementFee);
+        const totalQuote = getTotalQuoteForSpaces(directCost, designFee, drawingFee, managementFee, tax);
+        const totalCost = getTotalCostForSpaces(selectedSpaces) + designFee + drawingFee;
+        const grossProfit = totalQuote - totalCost;
+        const grossMargin = totalQuote > 0 ? (grossProfit / totalQuote * 100) : 0;
+        html += `<div style="margin-top: 16px; padding: 12px; background: #f0fdf4; border-radius: 12px; border: 1px solid #dcfce7;">
+            <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span>报价总额：</span><span>¥ ${totalQuote.toFixed(2)}</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span>成本总额：</span><span>¥ ${totalCost.toFixed(2)}</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span>毛利金额：</span><span>¥ ${grossProfit.toFixed(2)}</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span>毛利率：</span><span>${grossMargin.toFixed(2)}%</span></div>
+            <div style="font-size:0.7rem; color:#5f6c84; margin-top:4px;">* 含损耗、辅材，手动项目按40%毛利率估算成本</div>
+        </div>`;
+    }
+    if (showSignature) {
+        html += `<div style="display: flex; justify-content: space-between; margin-top: 32px; padding-top: 16px; flex-wrap: wrap; gap: 16px;">
+            <div>客户签字：${escapeHtml(signature.customerSign)}</div>
+            <div>日期：${escapeHtml(signature.customerSignDate)}</div>
+            <div>设计师签字：${escapeHtml(signature.designerSign)}</div>
+            <div>日期：${escapeHtml(signature.designerSignDate)}</div>
+        </div>`;
+    }
+    if (footerText) html += `<div style="text-align:center; margin-top:20px; font-size:0.8rem; color:#666;">${escapeHtml(footerText)}</div>`;
+    html += `</div>`;
+    container.innerHTML = html;
+    // 列宽调整逻辑（预览区内）
+    setTimeout(() => {
+        document.querySelectorAll('.resize-handle').forEach(handle => {
+            handle.removeEventListener('mousedown', onMouseDown);
+            handle.addEventListener('mousedown', onMouseDown);
+        });
+    }, 50);
+}
+let dragging = false, currentCol = null, startX = 0, startWidth = 0;
+function onMouseDown(e) {
+    dragging = true;
+    currentCol = e.target.getAttribute('data-col');
+    startX = e.clientX;
+    const th = e.target.parentElement;
+    startWidth = th.offsetWidth;
+    document.body.style.cursor = 'col-resize';
+    e.preventDefault();
+}
+function onMouseMove(e) {
+    if (!dragging) return;
+    const diff = e.clientX - startX;
+    let newWidth = startWidth + diff;
+    if (newWidth < 40) newWidth = 40;
+    currentColWidths[currentCol] = newWidth;
+    document.querySelectorAll(`.print-table th`).forEach(th => {
+        const handle = th.querySelector('.resize-handle');
+        if (handle && handle.getAttribute('data-col') === currentCol) th.style.width = newWidth + 'px';
+    });
+    const colIndex = Array.from(document.querySelectorAll('.export-column-checkbox:checked')).map(cb => cb.value).indexOf(currentCol) + 1;
+    document.querySelectorAll(`.print-table td:nth-child(${colIndex})`).forEach(td => td.style.width = newWidth + 'px');
+}
+function onMouseUp() {
+    dragging = false;
+    document.body.style.cursor = '';
+    saveAllDataToCloud().catch(console.error);
+}
+document.addEventListener('mousemove', onMouseMove);
+document.addEventListener('mouseup', onMouseUp);
+
+function exportToRealExcel() {
+    const previewArea = document.getElementById("printPreviewArea");
+    if (!previewArea) return;
+    const clone = previewArea.cloneNode(true);
+    clone.querySelectorAll('.resize-handle, .btn, button, .export-config, .config-group button').forEach(el => el.remove());
+    clone.querySelectorAll('.watermark').forEach(el => el.remove());
+    clone.style.position = 'relative';
+    clone.style.maxWidth = 'none';
+    clone.style.width = '100%';
+    const paperDirection = document.getElementById("paperDirection")?.value || "portrait";
+    const styles = document.querySelector('style').innerHTML;
+    const fullHtml = `<!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"><title>装修报价单</title><style>${styles}
+        .sidebar, .btn, .delete-item, .pick-material, .add-item-btn, .delete-space-btn,
+        #addNewSpaceBtn, .card-header button, .toolbar, .export-config, .modal, .sync-btn,
+        .delete-row-btn, .lib-actions button, .resize-handle, .collapse-btn,
+        .export-sidebar, .config-group, .card-header > div { display: none !important; }
+        .main-content { margin: 0 !important; padding: 0 !important; }
+        .print-area { max-width: none; margin: 0; padding: 20px; box-shadow: none; }
+        .print-table th, .print-table td { border: 1px solid #000 !important; }
+        @page { size: ${paperDirection === 'landscape' ? 'A4 landscape' : 'A4'}; }
+    </style></head>
+    <body>${clone.outerHTML}</body>
+    </html>`;
+    const blob = new Blob([fullHtml], { type: "application/vnd.ms-excel" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = `装修报价单_${projectInfo.projectName || '未命名'}_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// ==================== 历史版本 / 备份 / 项目汇总等辅助函数 ====================
+function saveHistorySnapshotAuto() {
+    let snap = { id: Date.now(), timestamp: new Date().toLocaleString(), spaces: JSON.parse(JSON.stringify(spaces)), projectInfo: JSON.parse(JSON.stringify(projectInfo)), feeSettings: JSON.parse(JSON.stringify(feeSettings)), signature: JSON.parse(JSON.stringify(signature)), targetGrossMargin, targetNetProfit, quoteTitleSettings: JSON.parse(JSON.stringify(quoteTitleSettings)) };
+    historySnapshots.unshift(snap);
+    if (historySnapshots.length > 10) historySnapshots.pop();
+    saveAllDataToCloud().catch(console.error); renderHistoryList();
+}
+function renderHistoryList() {
+    let container = document.getElementById("historyList");
+    if (!container) return;
+    container.innerHTML = "";
+    historySnapshots.forEach((snap, idx) => {
+        let div = document.createElement("div"); div.className = "history-item";
+        div.innerHTML = `<span>${snap.timestamp}</span><button class="btn-sm" data-idx="${idx}">恢复</button>`;
+        div.querySelector("button").onclick = () => {
+            if (confirm("恢复历史版本？")) {
+                spaces = JSON.parse(JSON.stringify(snap.spaces));
+                projectInfo = JSON.parse(JSON.stringify(snap.projectInfo));
+                feeSettings = JSON.parse(JSON.stringify(snap.feeSettings));
+                signature = JSON.parse(JSON.stringify(snap.signature));
+                targetGrossMargin = snap.targetGrossMargin;
+                targetNetProfit = snap.targetNetProfit;
+                quoteTitleSettings = JSON.parse(JSON.stringify(snap.quoteTitleSettings));
+                saveAllDataToCloud().catch(console.error); renderAllSpaces(); updateSummary(); updateProfitAnalysis(); renderPrintPreview(); alert("已恢复");
+            }
+        };
+        container.appendChild(div);
+    });
+}
+function clearHistory() { if (confirm("清空所有历史版本？")) { historySnapshots = []; saveAllDataToCloud().catch(console.error); renderHistoryList(); } }
+function renderActualCostPanel() {
+    let container = document.getElementById("actualCostGrid");
+    if (!container) return;
+    let totalBudgetCost = getTotalCostForSpaces(spaces) + getDesignFee() + getDrawingFee();
+    let totalQuote = getTotalQuoteForSpaces(getDirectCostForSpaces(spaces), getDesignFee(), getDrawingFee(), getManagementFeeForSpaces(getDirectCostForSpaces(spaces)), getTaxForSpaces(getDirectCostForSpaces(spaces), getManagementFeeForSpaces(getDirectCostForSpaces(spaces))));
+    container.innerHTML = `<div class="actual-item"><label>预算成本总额</label><div class="value">¥ ${totalBudgetCost.toFixed(2)}</div></div>
+        <div class="actual-item"><label>预算报价总额</label><div class="value">¥ ${totalQuote.toFixed(2)}</div></div>
+        <div class="actual-item"><label>实际材料成本</label><input type="number" id="actualMaterialCost" step="100" placeholder="输入实际材料费"></div>
+        <div class="actual-item"><label>实际人工成本</label><input type="number" id="actualLaborCost" step="100" placeholder="输入人工费"></div>
+        <div class="actual-item"><label>其他费用</label><input type="number" id="actualOtherCost" step="100" placeholder="其他"></div>
+        <button id="calcActualBtn" class="btn btn-primary">计算差异</button>`;
+    document.getElementById("calcActualBtn")?.addEventListener("click", () => {
+        let actualMat = parseFloat(document.getElementById("actualMaterialCost")?.value) || 0;
+        let actualLabor = parseFloat(document.getElementById("actualLaborCost")?.value) || 0;
+        let actualOther = parseFloat(document.getElementById("actualOtherCost")?.value) || 0;
+        let actualTotal = actualMat + actualLabor + actualOther;
+        let diff = actualTotal - totalBudgetCost;
+        let resultDiv = document.getElementById("costCompareResult");
+        resultDiv.innerHTML = `<div style="background:#f0f4f9; padding:12px; border-radius:16px;">
+            <strong>实际成本总计：¥ ${actualTotal.toFixed(2)}</strong><br>
+            预算成本：¥ ${totalBudgetCost.toFixed(2)}<br>
+            差异：${diff >= 0 ? '+' : ''}¥ ${diff.toFixed(2)} (${(diff / totalBudgetCost * 100).toFixed(2)}%)<br>
+            ${diff > 0 ? '⚠️ 超支' : '✅ 节约'}
+        </div>`;
+    });
+}
+function showSelectiveExportModal() {
+    let modal = document.getElementById("exportSelectModal");
+    modal.style.display = "flex";
+    document.getElementById("exportSelectConfirmBtn").onclick = () => {
+        let type = document.querySelector('input[name="exportType"]:checked').value;
+        let exportObj = {};
+        if (type === "material" || type === "all") exportObj.materialLibs = materialLibs;
+        if (type === "pending" || type === "all") exportObj.pendingMaterials = pendingMaterials;
+        if (type === "template" || type === "all") exportObj.templates = templates;
+        if (type === "space" || type === "all") exportObj.spaces = spaces;
+        if (type === "history" || type === "all") exportObj.historySnapshots = historySnapshots;
+        if (type === "all") { exportObj.projectInfo = projectInfo; exportObj.feeSettings = feeSettings; exportObj.signature = signature; exportObj.targetGrossMargin = targetGrossMargin; exportObj.targetNetProfit = targetNetProfit; exportObj.quoteTitleSettings = quoteTitleSettings; }
+        let blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: "application/json" });
+        let a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `报价系统_${type}_${Date.now()}.json`; a.click();
+        modal.style.display = "none";
+    };
+    document.getElementById("exportSelectCancelBtn").onclick = () => modal.style.display = "none";
+}
+function importData(file) {
+    let reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            let data = JSON.parse(e.target.result);
+            if (data.materialLibs) materialLibs = data.materialLibs;
+            if (data.spaces) spaces = data.spaces;
+            if (data.templates) templates = data.templates;
+            if (data.pendingMaterials) pendingMaterials = data.pendingMaterials;
+            if (data.historySnapshots) historySnapshots = data.historySnapshots;
+            if (data.projectInfo) projectInfo = data.projectInfo;
+            if (data.feeSettings) feeSettings = data.feeSettings;
+            if (data.signature) signature = data.signature;
+            if (data.targetGrossMargin !== undefined) targetGrossMargin = data.targetGrossMargin;
+            if (data.targetNetProfit !== undefined) targetNetProfit = data.targetNetProfit;
+            if (data.quoteTitleSettings) quoteTitleSettings = data.quoteTitleSettings;
+            saveAllDataToCloud().then(() => { location.reload(); alert("导入成功！"); }).catch(console.error);
+        } catch (err) { alert("文件格式错误"); }
+    };
+    reader.readAsText(file);
+}
+function resetAllData() { if (confirm("重置所有数据？")) { localStorage.clear(); location.reload(); } }
+function downloadImportTemplate(type) {
+    let data = [];
+    if (type === 'material') {
+        data = [["编号", "类别", "施工项目", "单位", "单价", "成本", "说明"]];
+        data.push(["JC01", "土建", "地面找平", "m²", 45, 30, "示例"]);
+    } else if (type === 'template') {
+        data = [["空间名称", "面积", "周长", "层高", "损耗率%", "项目编号", "项目类别", "项目名称", "单位", "规则", "单价", "说明"]];
+        data.push(["客厅", 20, 18, 2.7, 5, "01", "涂料", "墙面乳胶漆", "m²", "wall", 28, "示例"]);
+    }
+    let ws = XLSX.utils.aoa_to_sheet(data);
+    let wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "模板");
+    XLSX.writeFile(wb, `${type === 'material' ? '材料库导入模板' : '空间模板导入模板'}.xlsx`);
+}
+function importMaterialFromExcel(file) {
+    let reader = new FileReader();
+    reader.onload = e => {
+        let data = new Uint8Array(e.target.result);
+        let workbook = XLSX.read(data, { type: 'array' });
+        let sheet = workbook.Sheets[workbook.SheetNames[0]];
+        let rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        if (rows.length < 2) return;
+        let headers = rows[0];
+        let idx = { code: headers.indexOf("编号"), category: headers.indexOf("类别"), name: headers.indexOf("施工项目"), unit: headers.indexOf("单位"), price: headers.indexOf("单价"), cost: headers.indexOf("成本"), remark: headers.indexOf("说明") };
+        let newLib = { id: nextLibId++, name: "导入材料库", materials: [] };
+        for (let i = 1; i < rows.length; i++) {
+            let row = rows[i];
+            if (!row[idx.name]) continue;
+            newLib.materials.push({
+                id: nextMaterialIdGlobal++,
+                code: row[idx.code] || "",
+                category: row[idx.category] || "",
+                name: row[idx.name],
+                unit: row[idx.unit] || "项",
+                price: parseFloat(row[idx.price]) || 0,
+                cost: parseFloat(row[idx.cost]) || 0,
+                remark: row[idx.remark] || ""
+            });
+        }
+        materialLibs.push(newLib);
+        saveAllDataToCloud().catch(console.error);
+        renderMaterialLibs();
+        alert(`导入成功，新增材料库“${newLib.name}”`);
+    };
+    reader.readAsArrayBuffer(file);
+}
+function importTemplateFromExcel(file) {
+    let reader = new FileReader();
+    reader.onload = e => {
+        let data = new Uint8Array(e.target.result);
+        let workbook = XLSX.read(data, { type: 'array' });
+        let sheet = workbook.Sheets[workbook.SheetNames[0]];
+        let rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        if (rows.length < 2) return;
+        let headers = rows[0];
+        let idx = { spaceName: headers.indexOf("空间名称"), area: headers.indexOf("面积"), perimeter: headers.indexOf("周长"), height: headers.indexOf("层高"), lossRate: headers.indexOf("损耗率%"), itemCode: headers.indexOf("项目编号"), itemCategory: headers.indexOf("项目类别"), itemName: headers.indexOf("项目名称"), unit: headers.indexOf("单位"), rule: headers.indexOf("规则"), price: headers.indexOf("单价"), desc: headers.indexOf("说明") };
+        let templateMap = new Map();
+        for (let i = 1; i < rows.length; i++) {
+            let row = rows[i];
+            let spaceName = row[idx.spaceName];
+            if (!spaceName) continue;
+            if (!templateMap.has(spaceName)) {
+                templateMap.set(spaceName, { name: spaceName, type: "single", area: parseFloat(row[idx.area]) || 0, perimeter: parseFloat(row[idx.perimeter]) || 0, height: parseFloat(row[idx.height]) || 2.6, lossRate: parseFloat(row[idx.lossRate]) || 0, items: [] });
+            }
+            let tpl = templateMap.get(spaceName);
+            tpl.items.push({
+                id: nextTemplateItemId++,
+                code: row[idx.itemCode] || "",
+                category: row[idx.itemCategory] || "",
+                name: row[idx.itemName],
+                unit: row[idx.unit] || "项",
+                rule: row[idx.rule] || "manual",
+                quantity: 0,
+                price: parseFloat(row[idx.price]) || 0,
+                total: 0,
+                description: row[idx.desc] || "",
+                cost: 0,
+                fromMaterial: false,
+                locked: false
+            });
+        }
+        for (let tpl of templateMap.values()) {
+            templates.push({ id: nextTemplateId++, ...tpl });
+        }
+        saveAllDataToCloud().catch(console.error);
+        renderTemplates();
+        alert(`导入成功，新增 ${templateMap.size} 个空间模板`);
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// ==================== 项目汇总渲染（含分类） ====================
+function renderProjectsList() {
+    const container = document.getElementById("projectsListContainer");
+    if (!container) return;
+    container.innerHTML = "";
+    if (savedProjects.length === 0 && categories.length === 0) {
+        container.innerHTML = "<p style='text-align:center; padding:40px;'>暂无保存的项目，请从项目报价中保存。</p>";
+        return;
+    }
+    categories.forEach(cat => {
+        let catProjects = savedProjects.filter(p => p.categoryId === cat.id);
+        if (catProjects.length === 0 && cat.name !== "默认分类") return;
+        let catDiv = document.createElement("div"); catDiv.className = "category-container";
+        let headerDiv = document.createElement("div"); headerDiv.className = "category-header";
+        let titleSpan = document.createElement("span"); titleSpan.className = "category-title";
+        titleSpan.innerHTML = `<span>📂 ${escapeHtml(cat.name)} (${catProjects.length})</span>`;
+        let actionsSpan = document.createElement("span"); actionsSpan.className = "category-actions";
+        actionsSpan.innerHTML = `<button class="btn-sm rename-category" data-id="${cat.id}">重命名</button><button class="btn-sm delete-category" data-id="${cat.id}" style="background:#fee2e2;">删除分类</button>`;
+        headerDiv.appendChild(titleSpan);
+        headerDiv.appendChild(actionsSpan);
+        let projectsDiv = document.createElement("div"); projectsDiv.className = "category-projects";
+        if (catProjects.length === 0) {
+            projectsDiv.innerHTML = "<p style='color:#5f6c84; padding:8px;'>暂无项目</p>";
+        } else {
+            catProjects.forEach(proj => {
+                let projDiv = document.createElement("div"); projDiv.className = "project-item";
+                projDiv.innerHTML = `<div class="project-header"><input type="checkbox" class="project-batch-checkbox" value="${proj.id}"><span class="project-name" data-id="${proj.id}">📄 ${escapeHtml(proj.name)}</span><span class="project-date">保存时间：${proj.savedAt}</span><div class="project-actions"><button class="btn-sm load-project" data-id="${proj.id}">加载</button><button class="btn-sm move-project" data-id="${proj.id}">移动</button><button class="btn-sm rename-project" data-id="${proj.id}">重命名</button><button class="btn-sm delete-project" data-id="${proj.id}" style="background:#fee2e2;">删除</button></div></div>`;
+                projectsDiv.appendChild(projDiv);
+            });
+        }
+        catDiv.appendChild(headerDiv);
+        catDiv.appendChild(projectsDiv);
+        container.appendChild(catDiv);
+        headerDiv.addEventListener("click", (e) => { if (e.target.tagName === 'BUTTON') return; projectsDiv.classList.toggle("open"); });
+        projectsDiv.classList.add("open");
+    });
+    // 绑定项目内按钮事件（动态）
+    document.querySelectorAll(".load-project").forEach(btn => { btn.addEventListener("click", (e) => { let projId = parseInt(btn.getAttribute("data-id")); let proj = savedProjects.find(p => p.id === projId); if (proj && confirm("加载项目将覆盖当前所有未保存的数据，确定吗？")) { spaces = JSON.parse(JSON.stringify(proj.spaces)); projectInfo = JSON.parse(JSON.stringify(proj.projectInfo)); feeSettings = JSON.parse(JSON.stringify(proj.feeSettings)); signature = JSON.parse(JSON.stringify(proj.signature)); targetGrossMargin = proj.targetGrossMargin; targetNetProfit = proj.targetNetProfit; quoteTitleSettings = JSON.parse(JSON.stringify(proj.quoteTitleSettings)); saveAllDataToCloud().catch(console.error); renderAllSpaces(); updateSummary(); updateProfitAnalysis(); renderPrintPreview(); alert(`已加载项目“${proj.name}”`); } }); });
+    document.querySelectorAll(".rename-project").forEach(btn => { btn.addEventListener("click", (e) => { let projId = parseInt(btn.getAttribute("data-id")); let proj = savedProjects.find(p => p.id === projId); if (!proj) return; let modal = document.getElementById("renameProjectModal"); let input = document.getElementById("renameProjectInput"); input.value = proj.name; modal.style.display = "flex"; let confirmBtn = document.getElementById("confirmRenameBtn"); let cancelBtn = document.getElementById("cancelRenameBtn"); let onConfirm = () => { let newName = input.value.trim(); if (newName) { proj.name = newName; proj.savedAt = new Date().toLocaleString(); saveAllDataToCloud().catch(console.error); renderProjectsList(); } modal.style.display = "none"; confirmBtn.removeEventListener("click", onConfirm); cancelBtn.removeEventListener("click", onCancel); }; let onCancel = () => { modal.style.display = "none"; confirmBtn.removeEventListener("click", onConfirm); cancelBtn.removeEventListener("click", onCancel); }; confirmBtn.addEventListener("click", onConfirm); cancelBtn.addEventListener("click", onCancel); }); });
+    document.querySelectorAll(".delete-project").forEach(btn => { btn.addEventListener("click", (e) => { let projId = parseInt(btn.getAttribute("data-id")); let proj = savedProjects.find(p => p.id === projId); if (proj && confirm(`删除项目“${proj.name}”？`)) { savedProjects = savedProjects.filter(p => p.id !== projId); saveAllDataToCloud().catch(console.error); renderProjectsList(); } }); });
+    document.querySelectorAll(".move-project").forEach(btn => { btn.addEventListener("click", (e) => { let projId = parseInt(btn.getAttribute("data-id")); let proj = savedProjects.find(p => p.id === projId); if (!proj) return; let modal = document.getElementById("moveProjectCategoryModal"); let select = document.getElementById("moveTargetCategory"); select.innerHTML = ""; categories.forEach(cat => { let opt = document.createElement("option"); opt.value = cat.id; opt.textContent = cat.name; if (cat.id === proj.categoryId) opt.selected = true; select.appendChild(opt); }); modal.style.display = "flex"; let confirmBtn = document.getElementById("confirmMoveCategoryBtn"); let cancelBtn = document.getElementById("cancelMoveCategoryBtn"); let onConfirm = () => { let newCatId = parseInt(select.value); proj.categoryId = newCatId; proj.savedAt = new Date().toLocaleString(); saveAllDataToCloud().catch(console.error); renderProjectsList(); modal.style.display = "none"; confirmBtn.removeEventListener("click", onConfirm); cancelBtn.removeEventListener("click", onCancel); }; let onCancel = () => { modal.style.display = "none"; confirmBtn.removeEventListener("click", onConfirm); cancelBtn.removeEventListener("click", onCancel); }; confirmBtn.addEventListener("click", onConfirm); cancelBtn.addEventListener("click", onCancel); }); });
+    document.querySelectorAll(".rename-category").forEach(btn => { btn.addEventListener("click", (e) => { e.stopPropagation(); let catId = parseInt(btn.getAttribute("data-id")); let cat = categories.find(c => c.id === catId); if (!cat) return; let modal = document.getElementById("renameCategoryModal"); let input = document.getElementById("renameCategoryInput"); input.value = cat.name; modal.style.display = "flex"; let confirmBtn = document.getElementById("confirmRenameCategoryBtn"); let cancelBtn = document.getElementById("cancelRenameCategoryBtn"); let onConfirm = () => { let newName = input.value.trim(); if (newName) { cat.name = newName; saveAllDataToCloud().catch(console.error); renderProjectsList(); } modal.style.display = "none"; confirmBtn.removeEventListener("click", onConfirm); cancelBtn.removeEventListener("click", onCancel); }; let onCancel = () => { modal.style.display = "none"; confirmBtn.removeEventListener("click", onConfirm); cancelBtn.removeEventListener("click", onCancel); }; confirmBtn.addEventListener("click", onConfirm); cancelBtn.addEventListener("click", onCancel); }); });
+    document.querySelectorAll(".delete-category").forEach(btn => { btn.addEventListener("click", (e) => { e.stopPropagation(); let catId = parseInt(btn.getAttribute("data-id")); let cat = categories.find(c => c.id === catId); if (!cat) return; if (cat.name === "默认分类") { alert("默认分类不能删除"); return; } let projectsInCat = savedProjects.filter(p => p.categoryId === catId); if (projectsInCat.length > 0) { if (!confirm(`分类“${cat.name}”下有 ${projectsInCat.length} 个项目，删除分类后这些项目将移至“默认分类”。确定删除？`)) return; let defaultCat = categories.find(c => c.name === "默认分类"); if (defaultCat) { projectsInCat.forEach(p => p.categoryId = defaultCat.id); saveAllDataToCloud().catch(console.error); } } categories = categories.filter(c => c.id !== catId); saveAllDataToCloud().catch(console.error); renderProjectsList(); }); });
+}
+function saveCurrentProjectToSummary(projectName, categoryId) {
+    let newId = Date.now();
+    let snapshot = { id: newId, name: projectName, categoryId: categoryId, savedAt: new Date().toLocaleString(), spaces: JSON.parse(JSON.stringify(spaces)), projectInfo: JSON.parse(JSON.stringify(projectInfo)), feeSettings: JSON.parse(JSON.stringify(feeSettings)), signature: JSON.parse(JSON.stringify(signature)), targetGrossMargin, targetNetProfit, quoteTitleSettings: JSON.parse(JSON.stringify(quoteTitleSettings)) };
+    let existingIndex = savedProjects.findIndex(p => p.name === projectName);
+    if (existingIndex !== -1) {
+        if (confirm(`项目“${projectName}”已存在，是否覆盖？`)) savedProjects[existingIndex] = snapshot;
+        else return;
+    } else {
+        savedProjects.push(snapshot);
+    }
+    saveAllDataToCloud().catch(console.error);
+    renderProjectsList();
+    alert(`项目“${projectName}”已保存到项目汇总。`);
+}
+function batchExportProjects() {
+    let selectedProjects = [];
+    document.querySelectorAll('.project-batch-checkbox:checked').forEach(cb => {
+        let projId = parseInt(cb.value);
+        let proj = savedProjects.find(p => p.id === projId);
+        if (proj) selectedProjects.push(proj);
+    });
+    if (selectedProjects.length === 0) { alert("请先勾选要导出的项目"); return; }
+    let wb = XLSX.utils.book_new();
+    selectedProjects.forEach(proj => {
+        let rows = [];
+        rows.push(["项目名称", proj.name]);
+        rows.push(["客户", proj.projectInfo.customerName]);
+        rows.push(["报价日期", proj.savedAt]);
+        rows.push([]);
+        rows.push(["编号", "类别", "施工项目", "单位", "数量", "单价", "合计", "说明"]);
+        proj.spaces.forEach(space => {
+            rows.push([`【${space.name}】`, "", "", "", "", "", "", ""]);
+            space.items.forEach(item => {
+                rows.push([item.code, item.category, item.name, item.unit, item.quantity, item.price, item.total, item.description]);
+            });
+            let subtotal = space.items.reduce((s,i)=>s+i.total,0);
+            rows.push(["", "", "", "", "", "空间小计", subtotal, ""]);
+        });
+        rows.push([]);
+        rows.push(["总计", "", "", "", "", "", proj.spaces.reduce((s,sp)=>s+sp.items.reduce((ss,i)=>ss+i.total,0),0)]);
+        let ws = XLSX.utils.aoa_to_sheet(rows);
+        XLSX.utils.book_append_sheet(wb, ws, proj.name.substring(0,31));
+    });
+    XLSX.writeFile(wb, `批量报价单_${new Date().toISOString().slice(0,19)}.xlsx`);
+}
+
+// ==================== 初始化打印预览配置 ====================
+function initExportConfig() {
+    const spaceListDiv = document.getElementById("exportSpaceChecklist");
+    const columnListDiv = document.getElementById("exportColumnChecklist");
+    if (!spaceListDiv) return;
+    function renderSpaceChecklist() {
+        spaceListDiv.innerHTML = "";
+        spaces.forEach(space => {
+            const div = document.createElement("div");
+            div.className = "config-item";
+            div.innerHTML = `<input type="checkbox" class="export-space-checkbox" value="${space.id}" checked> <label>${escapeHtml(space.name)}</label>`;
+            spaceListDiv.appendChild(div);
+        });
+        document.querySelectorAll('.export-space-checkbox').forEach(cb => cb.addEventListener("change", () => renderPrintPreview()));
+    }
+    const allColumns = ["code", "category", "name", "unit", "quantity", "price", "total", "description"];
+    const columnLabels = { code:"编号", category:"类别", name:"施工项目", unit:"单位", quantity:"数量", price:"单价", total:"合计", description:"施工说明" };
+    columnListDiv.innerHTML = "";
+    allColumns.forEach(col => {
+        const div = document.createElement("div");
+        div.className = "config-item";
+        div.innerHTML = `<input type="checkbox" class="export-column-checkbox" value="${col}" checked> <label>${columnLabels[col]}</label>`;
+        columnListDiv.appendChild(div);
+    });
+    document.querySelectorAll('.export-column-checkbox').forEach(cb => cb.addEventListener("change", () => renderPrintPreview()));
+    const configElements = ["showProjectInfo", "showSpaceSubtotal", "showSummary", "showProfit", "showSignature", "showQuoteRemark", "hideZeroItems", "showMaterialSummary", "paperDirection", "fontSize", "textAlign", "verticalAlign", "enableWatermark"];
+    configElements.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("change", () => renderPrintPreview());
+    });
+    document.getElementById("headerLogoUrl")?.addEventListener("input", () => renderPrintPreview());
+    document.getElementById("footerText")?.addEventListener("input", () => renderPrintPreview());
+    document.getElementById("watermarkText")?.addEventListener("input", () => renderPrintPreview());
+    const rowHeightSlider = document.getElementById("rowHeightSlider");
+    const rowHeightValue = document.getElementById("rowHeightValue");
+    if (rowHeightSlider) {
+        rowHeightSlider.addEventListener("input", (e) => {
+            currentRowHeight = parseFloat(e.target.value);
+            rowHeightValue.innerText = currentRowHeight + "em";
+            renderPrintPreview();
+        });
+    }
+    renderSpaceChecklist();
+    renderPrintPreview();
+}
+function updateExportSpaceList() { initExportConfig(); }
+
+// ==================== 其他UI初始化 ====================
+function bindProjectInfoEvents() {
+    document.getElementById("totalArea").addEventListener("input", () => { projectInfo.totalArea = parseFloat(document.getElementById("totalArea").value) || 0; saveAllDataToCloud().catch(console.error); updateSummary(); updateProfitAnalysis(); renderPrintPreview(); });
+    document.getElementById("quoteRemark").addEventListener("input", () => { projectInfo.quoteRemark = document.getElementById("quoteRemark").value; saveAllDataToCloud().catch(console.error); renderPrintPreview(); });
+    ["projectName", "customerName", "customerPhone", "designerName", "designerPhone", "address", "houseType"].forEach(f => { let el = document.getElementById(f); if (el) el.addEventListener("change", () => { projectInfo[f] = el.value; saveAllDataToCloud().catch(console.error); renderPrintPreview(); }); });
+    ["customerSign", "customerSignDate", "designerSign", "designerSignDate"].forEach(f => { let el = document.getElementById(f); if (el) el.addEventListener("change", () => { signature[f] = el.value; saveAllDataToCloud().catch(console.error); renderPrintPreview(); }); });
+}
+function initProfitPanel() {
+    let header = document.getElementById("profitHeader");
+    let content = document.getElementById("profitContent");
+    if (header && content) header.addEventListener("click", () => { content.classList.toggle("show"); header.querySelector("span:last-child").innerHTML = content.classList.contains("show") ? "▲" : "▼"; });
+}
+function initSidebar() {
+    const sidebar = document.getElementById("sidebar");
+    const mainContent = document.getElementById("mainContent");
+    const collapseBtn = document.getElementById("collapseSidebarBtn");
+    if (collapseBtn) collapseBtn.addEventListener("click", () => { sidebar.classList.toggle("collapsed"); mainContent.classList.toggle("expanded"); collapseBtn.innerHTML = sidebar.classList.contains("collapsed") ? "▶" : "◀"; });
+}
+function initTabs() {
+    const btns = document.querySelectorAll(".tab-btn");
+    const panes = document.querySelectorAll(".tab-pane");
+    btns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const tabId = btn.getAttribute("data-tab");
+            btns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            panes.forEach(pane => pane.classList.remove("active-pane"));
+            document.getElementById(`${tabId}Pane`).classList.add("active-pane");
+            if (tabId === "material") renderMaterialLibs();
+            if (tabId === "pending") renderPendingMaterials();
+            if (tabId === "template") renderTemplates();
+            if (tabId === "space") renderAllSpaces();
+            if (tabId === "projects") renderProjectsList();
+            if (tabId === "export") { updateExportSpaceList(); renderPrintPreview(); }
+            if (tabId === "costcheck") renderActualCostPanel();
+            if (tabId === "history") renderHistoryList();
+        });
+    });
+}
+
+// ==================== 登录/注册流程 ====================
+async function register(email, password) {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw error;
+    const userId = data.user.id;
+    const trialEnd = new Date();
+    trialEnd.setDate(trialEnd.getDate() + 7);
+    await supabase.from('profiles').insert({ id: userId, email: email, subscription_end: trialEnd.toISOString() });
+    const emptyData = getEmptyDataStructure();
+    await supabase.from('user_data').insert({ user_id: userId, data: emptyData });
+    return data.user;
+}
+async function login(email, password) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data.user;
+}
+async function onLoginSuccess(user) {
+    currentUser = user;
+    document.getElementById('authModal').style.display = 'none';
+    document.getElementById('registerModal').style.display = 'none';
+    await loadAllDataFromCloud();
+    // 用户状态栏
+    let statusBar = document.getElementById('userStatusBar');
+    if (!statusBar) {
+        statusBar = document.createElement('div');
+        statusBar.id = 'userStatusBar';
+        document.body.appendChild(statusBar);
+    }
+    const { data } = await supabase.from('profiles').select('subscription_end').eq('id', user.id).single();
+    let subText = '试用中';
+    if (data && data.subscription_end) {
+        const end = new Date(data.subscription_end);
+        subText = `订阅至 ${end.toLocaleDateString()}`;
+    }
+    statusBar.innerHTML = `<span>👤 ${escapeHtml(user.email)}</span> <span class="subscription-badge">${subText}</span> <button id="logoutBtn" class="btn-sm logout-btn">退出</button>`;
+    document.getElementById('logoutBtn')?.addEventListener('click', () => { supabase.auth.signOut(); location.reload(); });
+    renderAllAfterLogin();
+}
+function renderAllAfterLogin() {
+    renderMaterialLibs();
+    renderPendingMaterials();
+    renderTemplates();
+    renderAllSpaces();
+    initExportConfig();
+    renderActualCostPanel();
+    renderHistoryList();
+    renderProjectsList();
+    updateSummary();
+    updateProfitAnalysis();
+    renderPrintPreview();
+    bindProjectInfoEvents();
+    initProfitPanel();
+}
+function initAuthUI() {
+    const authModal = document.getElementById('authModal');
+    const registerModal = document.getElementById('registerModal');
+    const doLogin = document.getElementById('doLoginBtn');
+    const showRegister = document.getElementById('showRegisterBtn');
+    const doRegister = document.getElementById('doRegisterBtn');
+    const backToLogin = document.getElementById('backToLoginBtn');
+    const authError = document.getElementById('authError');
+    const regError = document.getElementById('regError');
+    doLogin.onclick = async () => {
+        const email = document.getElementById('loginEmail').value.trim();
+        const pwd = document.getElementById('loginPassword').value;
+        authError.style.display = 'none';
+        try {
+            const user = await login(email, pwd);
+            await onLoginSuccess(user);
+        } catch (err) {
+            authError.innerText = err.message || '登录失败';
+            authError.style.display = 'block';
+        }
+    };
+    showRegister.onclick = () => {
+        authModal.style.display = 'none';
+        registerModal.style.display = 'flex';
+    };
+    doRegister.onclick = async () => {
+        const email = document.getElementById('regEmail').value.trim();
+        const pwd = document.getElementById('regPassword').value;
+        regError.style.display = 'none';
+        if (pwd.length < 6) {
+            regError.innerText = '密码至少6位';
+            regError.style.display = 'block';
+            return;
+        }
+        try {
+            const user = await register(email, pwd);
+            alert('注册成功！已为您开通7天免费试用。');
+            await onLoginSuccess(user);
+        } catch (err) {
+            regError.innerText = err.message || '注册失败';
+            regError.style.display = 'block';
+        }
+    };
+    backToLogin.onclick = () => {
+        registerModal.style.display = 'none';
+        authModal.style.display = 'flex';
+    };
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+        if (session) {
+            currentUser = session.user;
+            await onLoginSuccess(currentUser);
+        } else {
+            authModal.style.display = 'flex';
+        }
+    });
+}
+
+// ==================== 全局按钮事件绑定 ====================
+function bindGlobalButtons() {
+    document.getElementById("addNewLibBtn").onclick = () => checkMaterialAccess(() => { let newId = nextLibId++; materialLibs.push({ id: newId, name: `新材料库${newId}`, materials: [] }); saveAllDataToCloud().catch(console.error); renderMaterialLibs(); });
+    document.getElementById("changePasswordBtn").onclick = () => showChangePasswordModal();
+    document.getElementById("batchCategoryBtn").onclick = () => checkMaterialAccess(() => batchModifyCategory());
+    document.getElementById("addNewSpaceBtn").onclick = () => { let newId = nextSpaceId++; spaces.push({ id: newId, name: `新空间${newId}`, area: 10, perimeter: 12, height: 2.6, lossRate: 5, items: [] }); saveAllDataToCloud().catch(console.error); renderAllSpaces(); };
+    document.getElementById("addFromTemplateBtn").onclick = addSpaceFromTemplate;
+    document.getElementById("addNewTemplateBtn").onclick = addNewTemplate;
+    document.getElementById("addPendingMaterialBtn").onclick = addPendingMaterial;
+    document.getElementById("saveHistorySnapshotBtn").onclick = () => { saveHistorySnapshotAuto(); alert("已保存当前版本"); };
+    document.getElementById("clearHistoryBtn").onclick = clearHistory;
+    document.getElementById("printBtn").onclick = () => {
+        const previewArea = document.getElementById("printPreviewArea");
+        if (!previewArea) return;
+        const originalContent = previewArea.cloneNode(true);
+        const styles = document.querySelector('style').innerHTML;
+        const allStyles = Array.from(document.querySelectorAll('style')).map(style => style.innerHTML).join('');
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'absolute';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = 'none';
+        document.body.appendChild(iframe);
+        const iframeDoc = iframe.contentWindow.document;
+        iframeDoc.open();
+        iframeDoc.write(`
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="UTF-8"><title>装修报价单打印</title><style>${allStyles}
+                .sidebar, .btn, .delete-item, .pick-material, .add-item-btn, .delete-space-btn,
+                #addNewSpaceBtn, .card-header button, .toolbar, .export-config, .modal, .sync-btn,
+                .delete-row-btn, .lib-actions button, .resize-handle, .collapse-btn,
+                .export-sidebar, .config-group, .card-header > div { display: none !important; }
+                body { margin: 0; padding: 20px; background: white; }
+                .print-area { max-width: none; margin: 0 auto; padding: 0; }
+                .watermark { position: fixed; opacity: 0.1; font-size: 60px; transform: rotate(-30deg); top: 30%; left: 0; width: 100%; text-align: center; pointer-events: none; z-index: 999; }
+                @media print { body { margin: 0; padding: 0; } .watermark { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+            </style></head>
+            <body>${originalContent.outerHTML}</body>
+            </html>
+        `);
+        iframeDoc.close();
+        iframe.onload = () => {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            setTimeout(() => { document.body.removeChild(iframe); }, 1000);
+        };
+    };
+    document.getElementById("exportExcelBtn").onclick = exportToRealExcel;
+    document.getElementById("exportSelectiveBtn").onclick = showSelectiveExportModal;
+    document.getElementById("resetDataBtn").onclick = resetAllData;
+    document.getElementById("importFileInput").onchange = (e) => { if (e.target.files[0]) importData(e.target.files[0]); };
+    document.getElementById("refreshProjectsBtn").onclick = () => renderProjectsList();
+    document.getElementById("addCategoryBtn").onclick = () => {
+        let modal = document.getElementById("addCategoryModal");
+        let input = document.getElementById("newCategoryName");
+        input.value = "";
+        modal.style.display = "flex";
+        let confirmBtn = document.getElementById("confirmAddCategoryBtn");
+        let cancelBtn = document.getElementById("cancelAddCategoryBtn");
+        let onConfirm = () => {
+            let name = input.value.trim();
+            if (name) {
+                let newId = Date.now();
+                categories.push({ id: newId, name: name });
+                saveAllDataToCloud().catch(console.error);
+                renderProjectsList();
+            } else alert("请输入分类名称");
+            modal.style.display = "none";
+            confirmBtn.removeEventListener("click", onConfirm);
+            cancelBtn.removeEventListener("click", onCancel);
+        };
+        let onCancel = () => {
+            modal.style.display = "none";
+            confirmBtn.removeEventListener("click", onConfirm);
+            cancelBtn.removeEventListener("click", onCancel);
+        };
+        confirmBtn.addEventListener("click", onConfirm);
+        cancelBtn.addEventListener("click", onCancel);
+    };
+    document.getElementById("saveToProjectBtn").onclick = () => {
+        let defaultName = projectInfo.projectName.trim() || "未命名项目";
+        let modal = document.getElementById("saveProjectModal");
+        let input = document.getElementById("saveProjectName");
+        let catSelect = document.getElementById("saveProjectCategory");
+        catSelect.innerHTML = "";
+        categories.forEach(cat => {
+            let opt = document.createElement("option");
+            opt.value = cat.id;
+            opt.textContent = cat.name;
+            catSelect.appendChild(opt);
+        });
+        input.value = defaultName;
+        modal.style.display = "flex";
+        let confirmBtn = document.getElementById("confirmSaveProjectBtn");
+        let cancelBtn = document.getElementById("cancelSaveProjectBtn");
+        let onConfirm = () => {
+            let name = input.value.trim();
+            let catId = parseInt(catSelect.value);
+            if (name) saveCurrentProjectToSummary(name, catId);
+            else alert("请输入项目名称");
+            modal.style.display = "none";
+            confirmBtn.removeEventListener("click", onConfirm);
+            cancelBtn.removeEventListener("click", onCancel);
+        };
+        let onCancel = () => {
+            modal.style.display = "none";
+            confirmBtn.removeEventListener("click", onConfirm);
+            cancelBtn.removeEventListener("click", onCancel);
+        };
+        confirmBtn.addEventListener("click", onConfirm);
+        cancelBtn.addEventListener("click", onCancel);
+    };
+    document.querySelectorAll(".template-type-btn").forEach(btn => {
+        btn.onclick = () => {
+            document.querySelectorAll(".template-type-btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            currentTemplateType = btn.getAttribute("data-type");
+            renderTemplates();
+        };
+    });
+    document.getElementById("setTargetProfitBtn").onclick = () => {
+        let val = parseFloat(document.getElementById("targetProfitInput").value);
+        if (!isNaN(val) && val > 0) { targetNetProfit = val; targetGrossMargin = 0; saveAllDataToCloud().catch(console.error); updateProfitAnalysis(); renderPrintPreview(); }
+        document.getElementById("targetProfitModal").style.display = "none";
+    };
+    document.getElementById("closeTargetProfitBtn").onclick = () => document.getElementById("targetProfitModal").style.display = "none";
+    let profitGrid = document.getElementById("profitGrid");
+    if (profitGrid) profitGrid.addEventListener("click", (e) => { if (e.target.id === "setTargetProfitBtnSmall") document.getElementById("targetProfitModal").style.display = "flex"; });
+    document.getElementById("batchPriceBtn").onclick = () => {
+        let modal = document.getElementById("batchPriceModal");
+        modal.style.display = "flex";
+        document.getElementById("confirmPriceAdjustBtn").onclick = () => {
+            let percent = parseFloat(document.getElementById("pricePercent").value) || 0;
+            batchAdjustPrice(percent);
+            modal.style.display = "none";
+        };
+        document.getElementById("cancelPriceAdjustBtn").onclick = () => modal.style.display = "none";
+    };
+    document.getElementById("batchExportProjectsBtn").onclick = batchExportProjects;
+    document.getElementById("downloadExcelTemplateBtn").onclick = () => { let type = confirm("点击确定下载材料库模板，取消下载空间模板") ? "material" : "template"; downloadImportTemplate(type); };
+    document.getElementById("importMaterialExcel").onchange = (e) => { if (e.target.files[0]) importMaterialFromExcel(e.target.files[0]); e.target.value = ''; };
+    document.getElementById("importTemplateExcel").onchange = (e) => { if (e.target.files[0]) importTemplateFromExcel(e.target.files[0]); e.target.value = ''; };
+}
+
+// ==================== 启动 ====================
+window.addEventListener('DOMContentLoaded', () => {
+    initPassword();
+    initTabs();
+    initSidebar();
+    initProfitPanel();
+    bindGlobalButtons();
+    initAuthUI();  // 等待登录完成后再加载数据
+});
+</script>
+</body>
+</html>
