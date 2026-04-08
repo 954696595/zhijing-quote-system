@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>智景空间报价系统 - 云端专业版</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
-    <script src="https://cdn.skypack.dev/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
         /* 原有全部样式（无改动，保证功能完整） */
         * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif; }
@@ -1995,6 +1995,14 @@ function renderAllAfterLogin() {
 
 // ==================== 认证UI（统一模态框） ====================
 function initAuthUI() {
+    // 检测 Supabase 客户端是否可用
+    try {
+        localStorage.setItem('test', 'test');
+        localStorage.removeItem('test');
+    } catch(e) {
+        alert('您的浏览器隐私设置阻止了本系统存储登录信息，请允许第三方 Cookie 或关闭“跟踪预防”功能后刷新重试。');
+        console.error('localStorage 被阻止', e);
+    }
     const landingLogin = document.getElementById("landingLoginBtn");
     const landingRegister = document.getElementById("landingRegisterBtn");
     const pricingRegister = document.getElementById("pricingRegisterBtn");
