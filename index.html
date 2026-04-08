@@ -473,58 +473,56 @@ function getEmptyDataStructure() {
 }
 
 async function ensureProfileAndSubscription() {
-    if (!currentUser) return false;
-    // 查询 profiles
-    let { data, error } = await supabaseClient
-        .from('profiles')
-        .select('subscription_end')
-        .eq('id', currentUser.id)
-        .maybeSingle();
-    
-    if (!data && error && error.code === 'PGRST116') {
-        // 记录不存在，尝试创建
-        console.log('用户 profiles 不存在，正在创建...');
-        const trialEnd = new Date();
-        trialEnd.setDate(trialEnd.getDate() + 7);
-        const { error: insertError } = await supabaseClient
+    if (!currentUser) return true; // 无用户时不阻塞
+    try {
+        let { data, error } = await supabaseClient
             .from('profiles')
-            .upsert({ id: currentUser.id, email: currentUser.email, subscription_end: trialEnd.toISOString() });
-        if (insertError) {
-            console.error('创建 profiles 失败', insertError);
-            // 不阻塞登录，返回 true 让用户继续
+            .select('subscription_end')
+            .eq('id', currentUser.id)
+            .maybeSingle();
+        
+        // 记录不存在 → 尝试创建
+        if (!data && error && error.code === 'PGRST116') {
+            const trialEnd = new Date();
+            trialEnd.setDate(trialEnd.getDate() + 7);
+            const { error: insertError } = await supabaseClient
+                .from('profiles')
+                .upsert({ id: currentUser.id, email: currentUser.email, subscription_end: trialEnd.toISOString() });
+            if (insertError) console.error('创建 profiles 失败', insertError);
             return true;
         }
-        console.log('已创建试用期记录，截止至', trialEnd.toLocaleDateString());
+        // 其他错误（权限、网络等）不阻塞登录
+        if (error) {
+            console.error('查询 profiles 出错', error);
+            return true;
+        }
+        return true;
+    } catch (err) {
+        console.error('ensureProfileAndSubscription 异常', err);
         return true;
     }
-    if (error) {
-        console.error('查询 profiles 出错', error);
-        return true; // 允许继续
-    }
-    // 有数据，检查过期
-    if (data && data.subscription_end) {
-        const endDate = new Date(data.subscription_end);
-        const now = new Date();
-        if (endDate > now) return true;
-        console.warn('订阅已过期');
-    }
-    // 过期或数据异常：仍允许登录，但后续保存会提示
-    return true;
 }
 
 async function checkSubscriptionValidity() {
     if (!currentUser) return false;
-    const ensured = await ensureProfileAndSubscription();
-    if (!ensured) return false;
-    const { data, error } = await supabaseClient
-        .from('profiles')
-        .select('subscription_end')
-        .eq('id', currentUser.id)
-        .single();
-    if (error) return false;
-    const endDate = new Date(data.subscription_end);
-    const now = new Date();
-    return endDate > now;
+    try {
+        const { data, error } = await supabaseClient
+            .from('profiles')
+            .select('subscription_end')
+            .eq('id', currentUser.id)
+            .single();
+        if (error) {
+            console.error('查询订阅状态失败', error);
+            return true; // 查询失败时默认允许保存（避免误拦截）
+        }
+        if (!data || !data.subscription_end) return true;
+        const endDate = new Date(data.subscription_end);
+        const now = new Date();
+        return endDate > now;
+    } catch (err) {
+        console.error('checkSubscriptionValidity 异常', err);
+        return true;
+    }
 }
 
 async function loadAllDataFromCloud() {
@@ -1965,14 +1963,7 @@ function showApp() {
 // ==================== 登录成功后的初始化 ====================
 async function onLoginSuccess(user) {
     currentUser = user;
-    const ok = await ensureProfileAndSubscription();
-    if (!ok) {
-        // 实际上不会走到这里，因为 ensureProfileAndSubscription 总是返回 true
-        alert('您的账号订阅异常，请联系管理员。');
-        await supabaseClient.auth.signOut();
-        location.reload();
-        return;
-    }
+    await ensureProfileAndSubscription(); // 忽略返回值，不弹窗
     await loadAllDataFromCloud();
     showApp();
     renderAllAfterLogin();
@@ -2092,21 +2083,29 @@ function initAuthUI() {
             return;
         }
         try {
-            const { data, error } = await supabaseClient.auth.signUp({ email, password: pwd });
-            if (error) throw error;
-            const userId = data.user.id;
-            const trialEnd = new Date();
-            trialEnd.setDate(trialEnd.getDate() + 7);
-            await supabaseClient.from("profiles").upsert({ id: userId, email: email, subscription_end: trialEnd.toISOString() });
-            await supabaseClient.from("user_data").upsert({ user_id: userId, data: getEmptyDataStructure() });
-            alert("注册成功！已为您开通7天免费试用。");
-            await onLoginSuccess(data.user);
-            authModal.style.display = "none";
-        } catch (err) {
-            console.error(err);
-            regError.innerText = err.message || "注册失败，请稍后重试";
-            regError.style.display = "block";
-        }
+    const { data, error } = await supabaseClient.auth.signUp({ email, password: pwd });
+    if (error) throw error;
+    const userId = data.user.id;
+    const trialEnd = new Date();
+    trialEnd.setDate(trialEnd.getDate() + 7);
+    // 尝试插入 profiles，失败只警告，不阻止登录
+    const { error: profileError } = await supabaseClient
+        .from("profiles")
+        .upsert({ id: userId, email: email, subscription_end: trialEnd.toISOString() });
+    if (profileError) console.error("创建 profiles 失败", profileError);
+    // 尝试插入 user_data，失败则初始化空数据
+    const { error: dataError } = await supabaseClient
+        .from("user_data")
+        .upsert({ user_id: userId, data: getEmptyDataStructure() });
+    if (dataError) console.error("初始化 user_data 失败", dataError);
+    alert("注册成功！已为您开通7天免费试用。");
+    await onLoginSuccess(data.user);
+    authModal.style.display = "none";
+} catch (err) {
+    console.error(err);
+    regError.innerText = err.message || "注册失败，请稍后重试";
+    regError.style.display = "block";
+}
     };
 
     authModal.onclick = (e) => { if (e.target === authModal) authModal.style.display = "none"; };
