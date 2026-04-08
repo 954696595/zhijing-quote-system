@@ -7,7 +7,6 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* 此处省略原有全部样式（与用户提供的完全一致，无改动） */
         * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif; }
         body { background: #eef2f8; margin: 0; padding: 0; min-height: 100vh; }
         .app-layout { display: flex; min-height: 100vh; }
@@ -218,7 +217,7 @@
         <div id="backupPane" class="tab-pane"><div class="card"><div class="card-header"><span>💾 数据备份与恢复</span></div><div class="backup-area"><h4>📌 选择性导出数据</h4><p style="font-size:0.85rem;">材料库、待收录材料、项目模板、项目报价、历史版本可选择导出。<span style="color:#b91c1c;">（导出材料库需要密码）</span></p><div class="backup-buttons"><button id="exportSelectiveBtn" class="btn btn-primary">📤 选择性导出</button><label class="btn btn-primary" style="cursor:pointer;">📥 导入数据文件<input type="file" id="importFileInput" accept=".json" style="display:none;"></label><button id="resetDataBtn" class="btn btn-warning">⚠️ 重置所有数据</button><button id="downloadExcelTemplateBtn" class="btn btn-primary">📎 下载导入模板(Excel)</button><label class="btn btn-primary" style="cursor:pointer;">📂 从Excel导入材料库<input type="file" id="importMaterialExcel" accept=".xlsx, .xls" style="display:none;"></label><label class="btn btn-primary" style="cursor:pointer;">📂 从Excel导入空间模板<input type="file" id="importTemplateExcel" accept=".xlsx, .xls" style="display:none;"></label></div><p style="font-size:0.75rem; margin-top:12px;">* 导入将覆盖当前数据，建议先导出备份。Excel导入模板请先下载模板文件。</p></div></div></div>
     </div>
 </div>
-<!-- 模态框集合（省略，与原版完全一致，无改动） -->
+<!-- 模态框集合 -->
 <div id="passwordModal" class="modal"><div class="modal-content"><h3 id="passwordModalTitle">请输入材料库密码</h3><input type="password" id="passwordInput"><div><button id="passwordConfirmBtn" class="btn btn-primary">确认</button><button id="passwordCancelBtn" class="btn">取消</button></div><p id="passwordError" style="color:red; display:none;">密码错误</p></div></div>
 <div id="exportPasswordModal" class="modal"><div class="modal-content"><h3>🔐 导出数据需要密码验证</h3><input type="password" id="exportPasswordInput"><div><button id="exportPasswordConfirmBtn" class="btn btn-primary">确认导出</button><button id="exportPasswordCancelBtn" class="btn">取消</button></div><p id="exportPasswordError" style="color:red; display:none;">密码错误</p></div></div>
 <div id="changePasswordModal" class="modal"><div class="modal-content"><h3>修改材料库密码</h3><input type="password" id="oldPasswordInput" placeholder="原密码"><input type="password" id="newPasswordInput" placeholder="新密码"><input type="password" id="confirmPasswordInput" placeholder="确认新密码"><div><button id="changePwdConfirmBtn" class="btn btn-primary">确认修改</button><button id="changePwdCancelBtn" class="btn">取消</button></div><p id="changePwdError" style="color:red; display:none;"></p></div></div>
@@ -263,7 +262,7 @@
 // ==================== Supabase 配置 ====================
 const SUPABASE_URL = 'https://gdjeikyzqoxitebzmtwu.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_sRXZc84WxTpAK9b293sJig_VQOBijvS';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);  // 改名
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let currentUser = null;
 let isSubscriptionValid = true;
@@ -407,6 +406,51 @@ function getEmptyDataStructure() {
     };
 }
 
+async function ensureProfileAndSubscription() {
+    if (!currentUser) return false;
+    let { data, error } = await supabaseClient
+        .from('profiles')
+        .select('subscription_end')
+        .eq('id', currentUser.id)
+        .single();
+    
+    if (error && error.code === 'PGRST116') {
+        console.log('用户 profiles 不存在，正在创建...');
+        const trialEnd = new Date();
+        trialEnd.setDate(trialEnd.getDate() + 7);
+        const { error: insertError } = await supabaseClient
+            .from('profiles')
+            .insert({ id: currentUser.id, email: currentUser.email, subscription_end: trialEnd.toISOString() });
+        if (insertError) {
+            console.error('创建 profiles 失败', insertError);
+            return false;
+        }
+        console.log('已为用户创建试用期记录，截止至', trialEnd.toLocaleDateString());
+        return true;
+    } else if (error) {
+        console.error('查询 profiles 出错', error);
+        return false;
+    }
+    const endDate = new Date(data.subscription_end);
+    const now = new Date();
+    return endDate > now;
+}
+
+async function checkSubscriptionValidity() {
+    if (!currentUser) return false;
+    const ensured = await ensureProfileAndSubscription();
+    if (!ensured) return false;
+    const { data, error } = await supabaseClient
+        .from('profiles')
+        .select('subscription_end')
+        .eq('id', currentUser.id)
+        .single();
+    if (error) return false;
+    const endDate = new Date(data.subscription_end);
+    const now = new Date();
+    return endDate > now;
+}
+
 async function loadAllDataFromCloud() {
     if (!currentUser) return false;
     const { data, error } = await supabaseClient
@@ -477,7 +521,11 @@ async function saveAllDataToCloud() {
     if (!currentUser) return false;
     const valid = await checkSubscriptionValidity();
     if (!valid) {
-        alert('您的订阅已过期，请续费后继续使用。如需续费请联系管理员。');
+        const alreadyWarned = localStorage.getItem('subscription_expired_warning');
+        if (!alreadyWarned) {
+            alert('您的订阅已过期，数据将无法保存到云端。如需续费请联系管理员。');
+            localStorage.setItem('subscription_expired_warning', 'true');
+        }
         return false;
     }
     const fullData = {
@@ -500,19 +548,6 @@ async function saveAllDataToCloud() {
     return true;
 }
 
-async function checkSubscriptionValidity() {
-    if (!currentUser) return false;
-    const { data, error } = await supabaseClient
-        .from('profiles')
-        .select('subscription_end')
-        .eq('id', currentUser.id)
-        .single();
-    if (error) return false;
-    if (!data || !data.subscription_end) return false;
-    const endDate = new Date(data.subscription_end);
-    const now = new Date();
-    return endDate > now;
-}
 // ==================== 密码管理（材料库加密） ====================
 function initPassword() {
     let saved = localStorage.getItem("material_password");
@@ -827,7 +862,6 @@ function showMoveToLibModal(pendingId) {
         cancelBtn.addEventListener("click", onCancel);
     });
 }
-
 // ==================== 项目报价渲染（完整版，含列宽调整） ====================
 function renderAllSpaces() {
     const container = document.getElementById("spacesContainer");
@@ -1358,7 +1392,6 @@ function renderPrintPreview() {
     if (footerText) html += `<div style="text-align:center; margin-top:20px; font-size:0.8rem; color:#666;">${escapeHtml(footerText)}</div>`;
     html += `</div>`;
     container.innerHTML = html;
-    // 列宽调整逻辑（预览区内）
     setTimeout(() => {
         document.querySelectorAll('.resize-handle').forEach(handle => {
             handle.removeEventListener('mousedown', onMouseDown);
@@ -1804,9 +1837,14 @@ async function register(email, password) {
     const userId = data.user.id;
     const trialEnd = new Date();
     trialEnd.setDate(trialEnd.getDate() + 7);
-    await supabaseClient.from('profiles').insert({ id: userId, email: email, subscription_end: trialEnd.toISOString() });
-    const emptyData = getEmptyDataStructure();
-    await supabaseClient.from('user_data').insert({ user_id: userId, data: emptyData });
+    try {
+        await supabaseClient.from('profiles').insert({ id: userId, email: email, subscription_end: trialEnd.toISOString() });
+        const emptyData = getEmptyDataStructure();
+        await supabaseClient.from('user_data').insert({ user_id: userId, data: emptyData });
+    } catch (err) {
+        console.error('注册时插入数据失败', err);
+        throw new Error('注册失败：未能创建用户数据，请稍后重试或联系管理员。');
+    }
     return data.user;
 }
 async function login(email, password) {
@@ -1816,10 +1854,14 @@ async function login(email, password) {
 }
 async function onLoginSuccess(user) {
     currentUser = user;
-    document.getElementById('authModal').style.display = 'none';
-    document.getElementById('registerModal').style.display = 'none';
+    const ok = await ensureProfileAndSubscription();
+    if (!ok) {
+        alert('您的账号订阅异常，请联系管理员。');
+        await supabaseClient.auth.signOut();
+        location.reload();
+        return;
+    }
     await loadAllDataFromCloud();
-    // 用户状态栏
     let statusBar = document.getElementById('userStatusBar');
     if (!statusBar) {
         statusBar = document.createElement('div');
@@ -1833,7 +1875,11 @@ async function onLoginSuccess(user) {
         subText = `订阅至 ${end.toLocaleDateString()}`;
     }
     statusBar.innerHTML = `<span>👤 ${escapeHtml(user.email)}</span> <span class="subscription-badge">${subText}</span> <button id="logoutBtn" class="btn-sm logout-btn">退出</button>`;
-    document.getElementById('logoutBtn')?.addEventListener('click', () => { supabaseClient.auth.signOut(); location.reload(); });
+    document.getElementById('logoutBtn')?.addEventListener('click', async () => {
+        await supabaseClient.auth.signOut();
+        localStorage.removeItem('subscription_expired_warning');
+        location.reload();
+    });
     renderAllAfterLogin();
 }
 function renderAllAfterLogin() {
@@ -1923,7 +1969,6 @@ function bindGlobalButtons() {
         const previewArea = document.getElementById("printPreviewArea");
         if (!previewArea) return;
         const originalContent = previewArea.cloneNode(true);
-        const styles = document.querySelector('style').innerHTML;
         const allStyles = Array.from(document.querySelectorAll('style')).map(style => style.innerHTML).join('');
         const iframe = document.createElement('iframe');
         iframe.style.position = 'absolute';
@@ -2060,7 +2105,7 @@ window.addEventListener('DOMContentLoaded', () => {
     initSidebar();
     initProfitPanel();
     bindGlobalButtons();
-    initAuthUI();  // 等待登录完成后再加载数据
+    initAuthUI();
 });
 </script>
 </body>
