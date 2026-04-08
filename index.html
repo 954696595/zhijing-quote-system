@@ -246,7 +246,12 @@
 
 <!-- 应用布局（初始隐藏） -->
 <div id="appLayout" class="app-layout" style="display: none;">
-    <div class="sidebar" id="sidebar">
+    <!-- 用户状态栏（登录后显示） -->
+<div id="userStatusBar" style="position: fixed; top: 10px; right: 20px; z-index: 1000; background: white; padding: 6px 12px; border-radius: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-size: 0.8rem; display: flex; align-items: center; gap: 8px;">
+    <span id="userEmail"></span>
+    <button id="logoutBtn" class="logout-btn">退出</button>
+</div>
+<div class="sidebar" id="sidebar">
         <div class="sidebar-header"><h2>📋 智装报价 v2.8.8</h2><button class="collapse-btn" id="collapseSidebarBtn">◀</button></div>
         <div class="tab-buttons">
             <button class="tab-btn active" data-tab="material"><span class="emoji">📦</span><span>材料库管理</span></button>
@@ -527,41 +532,63 @@ async function checkSubscriptionValidity() {
 
 async function loadAllDataFromCloud() {
     if (!currentUser) return false;
-    const { data, error } = await supabaseClient
-        .from('user_data')
-        .select('data')
-        .eq('user_id', currentUser.id)
-        .single();
-    if (error && error.code !== 'PGRST116') {
-        console.error('加载数据失败', error);
+    try {
+        const { data, error } = await supabaseClient
+            .from('user_data')
+            .select('data')
+            .eq('user_id', currentUser.id)
+            .single();
+        if (error && error.code !== 'PGRST116') {
+            console.error('加载数据失败', error);
+            // 不阻塞，使用空数据
+            const empty = getEmptyDataStructure();
+            assignData(empty);
+            return false;
+        }
+        if (data) {
+            const d = data.data;
+            assignData(d);
+        } else {
+            const empty = getEmptyDataStructure();
+            assignData(empty);
+            await saveAllDataToCloud(); // 尝试创建初始数据
+        }
+        return true;
+    } catch (err) {
+        console.error('loadAllDataFromCloud 异常', err);
+        const empty = getEmptyDataStructure();
+        assignData(empty);
         return false;
     }
-    if (data) {
-        const d = data.data;
-        materialLibs = d.materialLibs || [];
-        spaces = d.spaces || [];
-        templates = d.templates || [];
-        pendingMaterials = d.pendingMaterials || [];
-        historySnapshots = d.historySnapshots || [];
-        projectInfo = d.projectInfo || { totalArea: 110 };
-        feeSettings = d.feeSettings || { designFeePerM2: 120, drawingFee: 0, managementRate: 8, taxRate: 3.41 };
-        signature = d.signature || {};
-        targetGrossMargin = d.targetGrossMargin !== undefined ? d.targetGrossMargin : 30;
-        targetNetProfit = d.targetNetProfit || null;
-        quoteTitleSettings = d.quoteTitleSettings || { companyName: "XX装饰工程有限公司", titleSuffix: "装修报价单" };
-        currentColWidths = d.currentColWidths || {};
-        currentRowHeight = d.currentRowHeight || 2;
-        nextLibId = d.nextLibId || 1;
-        nextMaterialIdGlobal = d.nextMaterialIdGlobal || 1000;
-        nextSpaceId = d.nextSpaceId || 1;
-        nextItemIdGlobalSpace = d.nextItemIdGlobalSpace || 1000;
-        nextTemplateId = d.nextTemplateId || 1;
-        nextTemplateItemId = d.nextTemplateItemId || 5000;
-        nextPendingId = d.nextPendingId || 1;
-        tableColWidths = d.tableColWidths || {};
-        categories = d.categories || [{ id: 1, name: "默认分类" }];
-        savedProjects = d.savedProjects || [];
-    } else {
+}
+
+// 辅助函数：将数据对象赋值给全局变量
+function assignData(d) {
+    materialLibs = d.materialLibs || [];
+    spaces = d.spaces || [];
+    templates = d.templates || [];
+    pendingMaterials = d.pendingMaterials || [];
+    historySnapshots = d.historySnapshots || [];
+    projectInfo = d.projectInfo || { totalArea: 110 };
+    feeSettings = d.feeSettings || { designFeePerM2: 120, drawingFee: 0, managementRate: 8, taxRate: 3.41 };
+    signature = d.signature || {};
+    targetGrossMargin = d.targetGrossMargin !== undefined ? d.targetGrossMargin : 30;
+    targetNetProfit = d.targetNetProfit || null;
+    quoteTitleSettings = d.quoteTitleSettings || { companyName: "XX装饰工程有限公司", titleSuffix: "装修报价单" };
+    currentColWidths = d.currentColWidths || {};
+    currentRowHeight = d.currentRowHeight || 2;
+    nextLibId = d.nextLibId || 1;
+    nextMaterialIdGlobal = d.nextMaterialIdGlobal || 1000;
+    nextSpaceId = d.nextSpaceId || 1;
+    nextItemIdGlobalSpace = d.nextItemIdGlobalSpace || 1000;
+    nextTemplateId = d.nextTemplateId || 1;
+    nextTemplateItemId = d.nextTemplateItemId || 5000;
+    nextPendingId = d.nextPendingId || 1;
+    tableColWidths = d.tableColWidths || {};
+    categories = d.categories || [{ id: 1, name: "默认分类" }];
+    savedProjects = d.savedProjects || [];
+}
+ else {
         const empty = getEmptyDataStructure();
         materialLibs = empty.materialLibs;
         spaces = empty.spaces;
@@ -1963,12 +1990,13 @@ function showApp() {
 // ==================== 登录成功后的初始化 ====================
 async function onLoginSuccess(user) {
     currentUser = user;
-    await ensureProfileAndSubscription(); // 忽略返回值，不弹窗
-    await loadAllDataFromCloud();
-    showApp();
-    renderAllAfterLogin();
+    await ensureProfileAndSubscription();
+    await loadAllDataFromCloud(); // 内部已处理失败情况
+    showApp();                    // 强制显示应用布局
+    renderAllAfterLogin();        // 所有渲染函数应能处理空数据
 }
 function renderAllAfterLogin() {
+    if (!document.getElementById("materialLibsContainer")) return; // 等待 DOM
     renderMaterialLibs();
     renderPendingMaterials();
     renderTemplates();
@@ -1982,6 +2010,7 @@ function renderAllAfterLogin() {
     renderPrintPreview();
     bindProjectInfoEvents();
     initProfitPanel();
+    updateUserStatusBar(); // 显示邮箱
 }
 
 // ==================== 认证UI（统一模态框） ====================
@@ -2120,6 +2149,36 @@ function initAuthUI() {
 }
 
 // ==================== 启动 ====================
+// 更新右上角用户邮箱
+function updateUserStatusBar() {
+    const userEmailSpan = document.getElementById("userEmail");
+    const statusBar = document.getElementById("userStatusBar");
+    if (currentUser) {
+        if (userEmailSpan) userEmailSpan.innerText = currentUser.email;
+        if (statusBar) statusBar.style.display = "flex";
+    } else {
+        if (statusBar) statusBar.style.display = "none";
+    }
+}
+// 退出登录
+async function logout() {
+    try {
+        await supabaseClient.auth.signOut();
+    } catch (err) {
+        console.error("退出失败", err);
+    }
+    // 清空全局用户状态
+    currentUser = null;
+    // 重置所有数据为初始空状态（避免下次登录显示旧数据）
+    const empty = getEmptyDataStructure();
+    assignData(empty);  // assignData 函数我们稍后会定义
+    // 切换回营销首页
+    showLandingPage();
+    // 刷新页面以确保所有状态彻底重置（可选，推荐）
+    // location.reload();
+    // 如果不刷新，手动清理 localStorage 中的订阅过期标记
+    localStorage.removeItem('subscription_expired_warning');
+}
 window.addEventListener('DOMContentLoaded', () => {
     initPassword();
     initTabs();
