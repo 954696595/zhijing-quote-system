@@ -7,6 +7,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
+        /* 此处省略原有全部样式（与用户提供的完全一致，无改动） */
         * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif; }
         body { background: #eef2f8; margin: 0; padding: 0; min-height: 100vh; }
         .app-layout { display: flex; min-height: 100vh; }
@@ -216,7 +217,8 @@
         <!-- 备份 -->
         <div id="backupPane" class="tab-pane"><div class="card"><div class="card-header"><span>💾 数据备份与恢复</span></div><div class="backup-area"><h4>📌 选择性导出数据</h4><p style="font-size:0.85rem;">材料库、待收录材料、项目模板、项目报价、历史版本可选择导出。<span style="color:#b91c1c;">（导出材料库需要密码）</span></p><div class="backup-buttons"><button id="exportSelectiveBtn" class="btn btn-primary">📤 选择性导出</button><label class="btn btn-primary" style="cursor:pointer;">📥 导入数据文件<input type="file" id="importFileInput" accept=".json" style="display:none;"></label><button id="resetDataBtn" class="btn btn-warning">⚠️ 重置所有数据</button><button id="downloadExcelTemplateBtn" class="btn btn-primary">📎 下载导入模板(Excel)</button><label class="btn btn-primary" style="cursor:pointer;">📂 从Excel导入材料库<input type="file" id="importMaterialExcel" accept=".xlsx, .xls" style="display:none;"></label><label class="btn btn-primary" style="cursor:pointer;">📂 从Excel导入空间模板<input type="file" id="importTemplateExcel" accept=".xlsx, .xls" style="display:none;"></label></div><p style="font-size:0.75rem; margin-top:12px;">* 导入将覆盖当前数据，建议先导出备份。Excel导入模板请先下载模板文件。</p></div></div></div>
     </div>
-</div><!-- 模态框集合 -->
+</div>
+<!-- 模态框集合（省略，与原版完全一致，无改动） -->
 <div id="passwordModal" class="modal"><div class="modal-content"><h3 id="passwordModalTitle">请输入材料库密码</h3><input type="password" id="passwordInput"><div><button id="passwordConfirmBtn" class="btn btn-primary">确认</button><button id="passwordCancelBtn" class="btn">取消</button></div><p id="passwordError" style="color:red; display:none;">密码错误</p></div></div>
 <div id="exportPasswordModal" class="modal"><div class="modal-content"><h3>🔐 导出数据需要密码验证</h3><input type="password" id="exportPasswordInput"><div><button id="exportPasswordConfirmBtn" class="btn btn-primary">确认导出</button><button id="exportPasswordCancelBtn" class="btn">取消</button></div><p id="exportPasswordError" style="color:red; display:none;">密码错误</p></div></div>
 <div id="changePasswordModal" class="modal"><div class="modal-content"><h3>修改材料库密码</h3><input type="password" id="oldPasswordInput" placeholder="原密码"><input type="password" id="newPasswordInput" placeholder="新密码"><input type="password" id="confirmPasswordInput" placeholder="确认新密码"><div><button id="changePwdConfirmBtn" class="btn btn-primary">确认修改</button><button id="changePwdCancelBtn" class="btn">取消</button></div><p id="changePwdError" style="color:red; display:none;"></p></div></div>
@@ -235,7 +237,7 @@
 <div id="batchMoveModal" class="modal"><div class="modal-content"><h3>📦 批量移动材料到其他库</h3><p>将选中材料移动到：</p><select id="batchMoveTargetLib" style="width:100%; margin:12px 0;"></select><div><button id="confirmBatchMoveBtn" class="btn btn-primary">确认移动</button><button id="cancelBatchMoveBtn" class="btn">取消</button></div></div></div>
 <div id="calcModal" class="modal"><div class="modal-content"><h3>工程量计算器</h3><div style="text-align:left;"><label>数学表达式 (支持 + - * / 和括号):</label><input type="text" id="calcExpression" placeholder="例如: 2.5*3.2 或 (2+3)*4"><br><button id="doCalcBtn" class="btn btn-primary">计算并填入数量</button><p style="font-size:0.7rem; color:#666;">计算结果将填入当前项目的“数量”字段（仅当规则为“手动”时生效）</p></div></div></div>
 <div id="batchCategoryModal" class="modal"><div class="modal-content"><h3>批量修改材料分类</h3><p>选中以下材料，统一设置分类</p><div id="batchCategoryMaterialList" style="max-height:300px; overflow-y:auto; border:1px solid #ccc; margin-bottom:12px;"></div><label>新分类名称: <input type="text" id="batchNewCategory" placeholder="例如: 水电材料"></label><div style="margin-top: 12px;"><label>或选择已有分类: <select id="batchExistingCategorySelect" style="width: 100%; margin-top: 6px;"><option value="">-- 请选择 --</option></select></label></div><div style="margin-top: 20px;"><button id="confirmBatchCategoryBtn" class="btn btn-primary">确认修改</button><button id="cancelBatchCategoryBtn" class="btn">取消</button></div></div></div>
-<!-- 认证模态框（登录/注册）已单独放在前面，但为了完整性再次列出（避免重复，实际不再添加） -->
+<!-- 认证模态框 -->
 <div id="authModal" class="modal" style="display: flex;">
     <div class="modal-content">
         <h2>🔐 智景空间报价系统</h2>
@@ -256,12 +258,12 @@
         <button id="backToLoginBtn" class="btn" style="width:100%;">返回登录</button>
         <p id="regError" style="color:red; display:none; margin-top:12px;"></p>
     </div>
-</div><script>
+</div>
+<script>
 // ==================== Supabase 配置 ====================
-// ⚠️ 请务必替换为您的 Supabase 项目实际值
-const SUPABASE_URL = 'https://gdjeikyzqoxitebzmtwu.supabase.co';      // 替换这里
-const SUPABASE_ANON_KEY = 'sb_publishable_sRXZc84WxTpAK9b293sJig_VQOBijvS';               // 替换这里
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const SUPABASE_URL = 'https://gdjeikyzqoxitebzmtwu.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_sRXZc84WxTpAK9b293sJig_VQOBijvS';
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);  // 改名
 
 let currentUser = null;
 let isSubscriptionValid = true;
@@ -407,7 +409,7 @@ function getEmptyDataStructure() {
 
 async function loadAllDataFromCloud() {
     if (!currentUser) return false;
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
         .from('user_data')
         .select('data')
         .eq('user_id', currentUser.id)
@@ -486,7 +488,7 @@ async function saveAllDataToCloud() {
         nextTemplateId, nextTemplateItemId, nextPendingId, tableColWidths,
         categories, savedProjects
     };
-    const { error } = await supabase.from('user_data').upsert({
+    const { error } = await supabaseClient.from('user_data').upsert({
         user_id: currentUser.id,
         data: fullData,
         updated_at: new Date()
@@ -500,7 +502,7 @@ async function saveAllDataToCloud() {
 
 async function checkSubscriptionValidity() {
     if (!currentUser) return false;
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
         .from('profiles')
         .select('subscription_end')
         .eq('id', currentUser.id)
@@ -511,7 +513,6 @@ async function checkSubscriptionValidity() {
     const now = new Date();
     return endDate > now;
 }
-
 // ==================== 密码管理（材料库加密） ====================
 function initPassword() {
     let saved = localStorage.getItem("material_password");
@@ -1798,18 +1799,18 @@ function initTabs() {
 
 // ==================== 登录/注册流程 ====================
 async function register(email, password) {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabaseClient.auth.signUp({ email, password });
     if (error) throw error;
     const userId = data.user.id;
     const trialEnd = new Date();
     trialEnd.setDate(trialEnd.getDate() + 7);
-    await supabase.from('profiles').insert({ id: userId, email: email, subscription_end: trialEnd.toISOString() });
+    await supabaseClient.from('profiles').insert({ id: userId, email: email, subscription_end: trialEnd.toISOString() });
     const emptyData = getEmptyDataStructure();
-    await supabase.from('user_data').insert({ user_id: userId, data: emptyData });
+    await supabaseClient.from('user_data').insert({ user_id: userId, data: emptyData });
     return data.user;
 }
 async function login(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data.user;
 }
@@ -1825,14 +1826,14 @@ async function onLoginSuccess(user) {
         statusBar.id = 'userStatusBar';
         document.body.appendChild(statusBar);
     }
-    const { data } = await supabase.from('profiles').select('subscription_end').eq('id', user.id).single();
+    const { data } = await supabaseClient.from('profiles').select('subscription_end').eq('id', user.id).single();
     let subText = '试用中';
     if (data && data.subscription_end) {
         const end = new Date(data.subscription_end);
         subText = `订阅至 ${end.toLocaleDateString()}`;
     }
     statusBar.innerHTML = `<span>👤 ${escapeHtml(user.email)}</span> <span class="subscription-badge">${subText}</span> <button id="logoutBtn" class="btn-sm logout-btn">退出</button>`;
-    document.getElementById('logoutBtn')?.addEventListener('click', () => { supabase.auth.signOut(); location.reload(); });
+    document.getElementById('logoutBtn')?.addEventListener('click', () => { supabaseClient.auth.signOut(); location.reload(); });
     renderAllAfterLogin();
 }
 function renderAllAfterLogin() {
@@ -1897,7 +1898,7 @@ function initAuthUI() {
         registerModal.style.display = 'none';
         authModal.style.display = 'flex';
     };
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabaseClient.auth.getSession().then(async ({ data: { session } }) => {
         if (session) {
             currentUser = session.user;
             await onLoginSuccess(currentUser);
